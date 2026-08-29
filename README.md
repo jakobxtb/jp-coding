@@ -62,7 +62,7 @@ ist trotzdem eine gute Idee.
 ## Selbst bauen
 
 ```bash
-git clone https://github.com/DEIN-NAME/jp-coding.git
+git clone https://github.com/jakobxtb/jp-coding.git
 cd jp-coding
 ./build.sh                                    # baut nach /Applications
 ./build.sh ./dist                             # baut nach ./dist
