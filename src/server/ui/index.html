@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JP Coding</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="bg"><div class="grid"></div><div class="scan"></div></div>
+
+<div id="app">
+  <aside class="glass">
+    <div class="brand">
+      <h1>JP&nbsp;CODING</h1>
+      <div class="sub">LOCAL · NVIDIA NIM · ISOLIERT</div>
+    </div>
+    <button class="newbtn" id="new">+ NEUER CHAT</button>
+    <div class="chats" id="chats"></div>
+    <div class="sidefoot">
+      <button class="linkbtn" id="openSkills">Skills</button>
+      <button class="linkbtn" id="openSettings">Einstellungen</button>
+    </div>
+    <div class="foot">
+      <div><span><span class="dot no" id="dot"></span>Proxy</span><span id="proxytxt">...</span></div>
+      <div><span>Skills aktiv</span><span id="skills">...</span></div>
+      <div><span>Speicher</span><span id="store">Paket</span></div>
+    </div>
+  </aside>
+
+  <main class="glass">
+    <header>
+      <div class="pill" id="cwdpill" title="Arbeitsordner"><b id="cwd">—</b></div>
+      <select id="model" title="Modell wechseln"></select>
+      <button class="mini" id="test" title="Modell live testen">TEST</button>
+      <select id="perm" title="Berechtigungen">
+        <option value="bypassPermissions">Vollzugriff</option>
+        <option value="acceptEdits">Nur Datei-Edits</option>
+        <option value="default">Alles fragen</option>
+      </select>
+      <div class="spacer"></div>
+      <button class="mini" id="export" title="Chat als Markdown speichern">EXPORT</button>
+      <button class="mini" id="folder">ORDNER</button>
+    </header>
+
+    <div id="msgs"></div>
+
+    <div class="composer">
+      <div id="attachbar"></div>
+      <div class="cbox">
+        <button class="attach" id="attach" title="Dateien anhaengen">+</button>
+        <textarea id="input" rows="1" placeholder="Nachricht an JP Coding ..."></textarea>
+        <button class="send" id="send" title="Senden">&#9654;</button>
+        <button class="send stop" id="stop" title="Abbrechen" style="display:none">&#9632;</button>
+      </div>
+      <div class="hint">Enter senden · Shift+Enter neue Zeile · alles bleibt lokal</div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ Einstellungen ============ -->
+<div class="overlay" id="ovSettings">
+  <div class="modal glass">
+    <div class="mhead"><h2>Einstellungen</h2><button class="x" data-close="ovSettings">&times;</button></div>
+    <div class="mbody">
+      <div class="tabs">
+        <button class="tab on" data-tab="tKeys">API-Schlüssel</button>
+        <button class="tab" data-tab="tSys">System</button>
+        <button class="tab" data-tab="tInfo">Info</button>
+      </div>
+
+      <section id="tKeys" class="tabpane on">
+        <p class="note">Schlüssel werden lokal in <code>~/.fcc/.env</code> gespeichert und nur an den
+        jeweiligen Anbieter gesendet. Nach dem Speichern startet der Proxy automatisch neu.</p>
+        <div id="keys"></div>
+      </section>
+
+      <section id="tSys" class="tabpane">
+        <div id="setupList" class="checklist"></div>
+        <div class="row">
+          <button class="btn" id="btnInstall">Fehlendes installieren</button>
+          <button class="btn ghost" id="btnRestart">Proxy neu starten</button>
+          <button class="btn ghost" id="btnRepair">Modell reparieren</button>
+        </div>
+        <pre id="installLog" class="log" style="display:none"></pre>
+      </section>
+
+      <section id="tInfo" class="tabpane">
+        <div class="kv"><span>Version</span><b>1.0</b></div>
+        <div class="kv"><span>Datenordner</span><b id="iData">—</b></div>
+        <div class="kv"><span>Proxy-Port</span><b id="iPort">—</b></div>
+        <div class="kv"><span>Claude Code</span><b id="iClaude">—</b></div>
+        <p class="note">JP Coding startet Claude Code in einer macOS-Sandbox. Schreibzugriff auf
+        <code>~/.claude</code>, Shell-Profile und die Schlüsseldatei ist auf Kernel-Ebene gesperrt.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Skills ============ -->
+<div class="overlay" id="ovSkills">
+  <div class="modal glass wide">
+    <div class="mhead">
+      <h2>Skills</h2>
+      <div>
+        <button class="btn ghost" id="btnImportSkill">Skill importieren</button>
+        <button class="x" data-close="ovSkills">&times;</button>
+      </div>
+    </div>
+    <div class="mbody">
+      <input class="search" id="skillSearch" placeholder="Skills durchsuchen ...">
+      <div id="skillList" class="skilllist"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Erst-Einrichtung ============ -->
+<div class="overlay" id="ovSetup">
+  <div class="modal glass">
+    <div class="mhead"><h2>Willkommen bei JP Coding</h2></div>
+    <div class="mbody">
+      <p class="note">Einmalige Einrichtung. Trage deinen NVIDIA-NIM-Schlüssel ein — den Rest
+      installiert die App selbst.</p>
+      <label class="lbl">NVIDIA NIM API-Schlüssel</label>
+      <input class="inp" id="setupKey" type="password" placeholder="nvapi-...">
+      <p class="note">Kostenlos erhältlich unter
+      <a href="https://build.nvidia.com/settings/api-keys" target="_blank">build.nvidia.com</a>.</p>
+      <div id="setupList2" class="checklist"></div>
+      <div class="row">
+        <button class="btn" id="btnSetupGo">Einrichten und starten</button>
+      </div>
+      <pre id="setupLog" class="log" style="display:none"></pre>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="glass"></div>
+<script src="/app.js"></script>
+</body>
+</html>
