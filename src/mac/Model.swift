@@ -33,6 +33,9 @@ struct Chat: Codable, Identifiable, Hashable {
     var model: String
     var permission: String = "bypassPermissions"
     var sessionId: String? = nil
+    /// Modell, mit dem die laufende Sitzung angelegt wurde. Wechselt das Modell,
+    /// ist die Sitzung nicht mehr fortsetzbar und wird neu begonnen.
+    var sessionModel: String? = nil
     var created: String = Chat.stamp()
     var updated: String = Chat.stamp()
     var messages: [Message] = []
@@ -208,6 +211,27 @@ final class Store: ObservableObject {
         save(c); currentID = c.id
         state.lastDir = cwd; saveState()
         return c
+    }
+
+    /// Kompakter Gespraechsverlauf als Kontext fuer eine frische Sitzung.
+    static func transcript(_ c: Chat, maxMessages: Int = 14, maxChars: Int = 700) -> String {
+        let msgs = c.messages.suffix(maxMessages)
+        guard !msgs.isEmpty else { return "" }
+        var lines: [String] = ["Bisheriger Gespraechsverlauf (aelteste zuerst):"]
+        for m in msgs {
+            let who = m.role == "user" ? "Nutzer" : "Du"
+            var t = m.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.count > maxChars { t = String(t.prefix(maxChars)) + " [...]" }
+            if !m.files.isEmpty {
+                t += "\n(Anhaenge: " + m.files.map { URL(fileURLWithPath: $0).lastPathComponent }
+                        .joined(separator: ", ") + ")"
+            }
+            if t.isEmpty { continue }
+            lines.append("\(who): \(t)")
+        }
+        lines.append("")
+        lines.append("--- Neue Nachricht des Nutzers ---")
+        return lines.joined(separator: "\n")
     }
 
     static func shortModel(_ m: String) -> String {

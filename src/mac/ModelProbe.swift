@@ -46,7 +46,7 @@ final class ModelProbe: ObservableObject {
     /// NVIDIAs Gratis-Modelle schwanken stark, deshalb ein zweiter Versuch,
     /// bevor ein Modell als defekt gilt.
     @discardableResult
-    func test(_ model: String, timeout: TimeInterval = 120) async -> ModelResult {
+    func test(_ model: String, timeout: TimeInterval = 90) async -> ModelResult {
         testing.insert(model)
         let t0 = Date()
         var (ok, detail) = await Backend.testModelViaAgent(model, timeout: timeout)
@@ -65,7 +65,7 @@ final class ModelProbe: ObservableObject {
     }
 
     /// Reihum alle uebergebenen Modelle testen, zwei gleichzeitig.
-    func sweep(_ models: [String], timeout: TimeInterval = 100) {
+    func sweep(_ models: [String], timeout: TimeInterval = 90) {
         guard !sweepRunning else { return }
         sweepRunning = true; sweepDone = 0; sweepTotal = models.count
         sweepTask = Task {

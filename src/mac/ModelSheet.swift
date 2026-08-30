@@ -60,10 +60,10 @@ struct ModelSheet: View {
                         .font(Theme.f(10.5)).foregroundColor(Theme.muted)
                 } else {
                     Button("Grundstock testen") {
-                        probe.sweep(store.curated, timeout: 130)
+                        probe.sweep(store.curated, timeout: 90)
                     }.buttonStyle(JPButton(prominent: true))
                     Button("ALLE testen (dauert)") {
-                        probe.sweep(store.curated + others, timeout: 45)
+                        probe.sweep(store.curated + others, timeout: 60)
                     }.buttonStyle(JPButton())
                     let ok = probe.workingModels().count
                     Text("\(ok) bestaetigt funktionierend")

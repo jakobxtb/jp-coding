@@ -250,7 +250,7 @@ enum Backend {
     /// Echter Test: startet Claude Code genau so wie der Chat es tut.
     /// Eine blosse API-Anfrage sagt nichts aus - Modelle scheitern erst am
     /// grossen System-Prompt mit allen Werkzeugdefinitionen.
-    static func testModelViaAgent(_ model: String, timeout: TimeInterval = 120) async -> (Bool, String) {
+    static func testModelViaAgent(_ model: String, timeout: TimeInterval = 90) async -> (Bool, String) {
         guard let claude = claudeBin else { return (false, "Claude Code CLI fehlt") }
         let profile = writeProfile()
         return await withCheckedContinuation { cont in
@@ -273,7 +273,11 @@ enum Backend {
                 do { try p.run() } catch {
                     cont.resume(returning: (false, "Start fehlgeschlagen")); return
                 }
-                inP.fileHandleForWriting.write("Antworte mit genau: OK".data(using: .utf8)!)
+                // Werkzeugaufruf erzwingen: nur wer echte tool_use-Bloecke erzeugt,
+                // kann auch Skills und Dateiarbeit - blosser Text reicht nicht.
+                inP.fileHandleForWriting.write(
+                    "Lege im aktuellen Ordner die Datei jp_selftest.txt mit dem Inhalt OK an. Antworte dann kurz."
+                    .data(using: .utf8)!)
                 try? inP.fileHandleForWriting.close()
 
                 let deadline = DispatchTime.now() + timeout
@@ -286,18 +290,23 @@ enum Backend {
                 killer.cancel()
 
                 var text = ""
+                var toolCalls = 0
                 for line in String(data: data, encoding: .utf8)?.components(separatedBy: .newlines) ?? [] {
                     guard let d = line.data(using: .utf8),
                           let e = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
                           e["type"] as? String == "assistant",
                           let msg = e["message"] as? [String: Any],
                           let blocks = msg["content"] as? [[String: Any]] else { continue }
-                    for b in blocks where b["type"] as? String == "text" {
-                        text += (b["text"] as? String) ?? ""
+                    for b in blocks {
+                        if b["type"] as? String == "text" { text += (b["text"] as? String) ?? "" }
+                        if b["type"] as? String == "tool_use" { toolCalls += 1 }
                     }
                 }
+                try? FileManager.default.removeItem(
+                    at: Paths.home.appendingPathComponent("Downloads/jp_selftest.txt"))
+
                 let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if t.isEmpty {
+                if t.isEmpty && toolCalls == 0 {
                     cont.resume(returning: (false, p.terminationStatus == 15 ? "Zeitüberschreitung" : "keine Antwort"))
                     return
                 }
@@ -307,7 +316,10 @@ enum Backend {
                 if t.lowercased().contains("rate limit") {
                     cont.resume(returning: (false, "Anbieter-Limit erreicht")); return
                 }
-                cont.resume(returning: (true, String(t.prefix(40))))
+                if toolCalls == 0 {
+                    cont.resume(returning: (false, "kann keine Werkzeuge aufrufen")); return
+                }
+                cont.resume(returning: (true, "Werkzeuge OK"))
             }
         }
     }

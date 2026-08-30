@@ -22,39 +22,44 @@ bevor ein Modell als defekt gilt — NVIDIAs Gratis-Modelle schwanken von Lauf z
 
 ### Mitgelieferter Grundstock
 
-Sieben Modelle, jedes **im echten Agenten** geprüft — also durch die Claude-Code-CLI mit
-vollem System-Prompt und allen Werkzeugdefinitionen, nicht nur mit einer kleinen
-API-Anfrage. Genau das ist der Unterschied: Modelle bestehen den kleinen Test und
-scheitern trotzdem am Agenten.
+Sieben Modelle, jedes daraufhin geprüft, dass es **echte Werkzeugaufrufe** erzeugt —
+also durch die Claude-Code-CLI mit vollem System-Prompt eine Datei anlegt. Ein Modell,
+das nur Text zurückgibt, ist als Agent nutzlos.
 
-| Modell | Antwort im Agenten |
+| Modell | Werkzeugaufruf |
 |---|---|
-| gpt-oss-120b | 4,3 s |
-| nemotron-3-nano-30b | 2,8 s |
-| gpt-oss-20b | 3,1 s |
-| nemotron-3-super-120b | 5,1 s |
-| nemotron-3-nano-omni-reasoning | 7,5 s |
-| nemotron-3.5-lightning-30b | 8,3 s |
-| llama-3.2-11b-vision | 29,5 s |
-
-Alle laufen mit abgeschaltetem Reasoning (`[fast]`) — das ist für Agentenbetrieb
-durchweg die bessere Variante.
+| nemotron-3-nano-30b | 8,0 s |
+| nemotron-3.5-lightning-30b | 8,2 s |
+| gpt-oss-20b | 8,4 s |
+| nemotron-3-super-120b | 8,7 s |
+| llama-3.2-11b-vision | 8,8 s |
+| gpt-oss-120b | 10,4 s |
+| nemotron-3-nano-omni-reasoning | 12,1 s |
 
 Von 63 Chat-Modellen, die NVIDIA listet, sind je nach Tageszeit nur 8 bis 13 erreichbar;
-der Rest gibt `HTTP 404 – Function not found` oder `410 Gone`. Nicht agententauglich sind
-DeepSeek-v4, Mistral-Large, Qwen3, Llama-Nemotron, Kimi (`Invalid request sent to
-provider`), MiniMax-M3 (Anbieter-Limit) und nemotron-3-ultra.
+der Rest gibt `HTTP 404 – Function not found` oder `410 Gone`. Nicht nutzbar sind
+DeepSeek-v4, Mistral-Large, Qwen3, Llama-Nemotron, Kimi und MiniMax-M3.
+GLM gibt es bei NVIDIA nicht mehr.
 
-**Mehr Modelle bekommst du über weitere Anbieter**: Groq, Cerebras, Google Gemini und
-OpenRouter haben großzügige Gratis-Kontingente, Z.AI liefert GLM. Schlüssel in den
-Einstellungen eintragen — die Modelle erscheinen dann von allein in der Liste.
+**Mehr und bessere Modelle** bekommst du über weitere Anbieter: Groq, Cerebras, Google
+Gemini und OpenRouter haben großzügige Gratis-Kontingente und deutlich zuverlässigeres
+Tool-Calling, Z.AI liefert GLM. Schlüssel in den Einstellungen eintragen — die Modelle
+erscheinen dann von allein.
+
+### Gedächtnis
+
+Die App setzt die Claude-Code-Sitzung fort, solange das Modell dasselbe bleibt. Wechselst
+du mitten im Gespräch das Modell, lässt sich die Sitzung des anderen Anbieters nicht
+fortsetzen — dann bekommt das neue Modell den bisherigen Verlauf als Kontext mit. In
+beiden Fällen bleibt der Gesprächsfaden erhalten.
 
 **Slash-Befehle im Eingabefeld** — `/` öffnet die Liste, Pfeiltasten navigieren, Tab
 vervollständigt. Fünfzehn App-Befehle (`/new`, `/model`, `/code`, `/preview`, `/skills` …)
 plus alle Befehle, die die Claude-Code-CLI meldet — inklusive deiner Skills.
 
-**Code-Editor** — Dateibaum des Projektordners, Editor mit Monospace und Undo, Sichern,
-Bildvorschau. Ordner wie `node_modules` und `.git` werden ausgeblendet.
+**Code-Editor** — Dateibaum, Tabs für offene Dateien, Syntaxfarben für Swift, JS/TS,
+Python, HTML, CSS und Shell, Tab-Einrückung, Sichern, Bildvorschau. Ordner wie
+`node_modules` und `.git` bleiben ausgeblendet. Zeilennummern hat er noch nicht.
 
 **Live-Vorschau** — WebKit-Ansicht auf eine Datei im Projekt oder eine Adresse wie
 `http://localhost:3000`. Findet `index.html` von allein und lädt bei Dateiänderung

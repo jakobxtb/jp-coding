@@ -97,6 +97,7 @@ struct CodePane: View {
     @State private var loaded: URL? = nil
     @State private var dirty = false
     @State private var note: String? = nil
+    @State private var openTabs: [URL] = []
 
     init(root: String, selected: Binding<URL?>) {
         self.root = root
@@ -143,22 +144,38 @@ struct CodePane: View {
             .background(Theme.glass2)
 
             VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Text(selected?.lastPathComponent ?? "keine Datei gewaehlt")
-                        .font(Theme.f(11)).foregroundColor(Theme.text).lineLimit(1)
-                    if dirty {
-                        Text("geaendert").font(Theme.f(9.5)).foregroundColor(Theme.warn)
+                // Tab-Leiste
+                HStack(spacing: 3) {
+                    ForEach(openTabs.suffix(6), id: \.self) { u in
+                        HStack(spacing: 5) {
+                            Text(u.lastPathComponent).font(Theme.f(10.5))
+                                .foregroundColor(selected == u ? Theme.green : Theme.muted)
+                                .lineLimit(1)
+                            if selected == u && dirty {
+                                Circle().fill(Theme.warn).frame(width: 5, height: 5)
+                            }
+                            Button {
+                                openTabs.removeAll { $0 == u }
+                                if selected == u { selected = openTabs.last }
+                            } label: { Image(systemName: "xmark").font(.system(size: 7)) }
+                                .buttonStyle(.plain).foregroundColor(Theme.muted.opacity(0.7))
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(RoundedRectangle(cornerRadius: 6)
+                            .fill(selected == u ? Theme.green.opacity(0.12) : Color.clear))
+                        .contentShape(Rectangle())
+                        .onTapGesture { selected = u }
                     }
-                    Spacer()
+                    Spacer(minLength: 4)
                     if let n = note {
                         Text(n).font(Theme.f(9.5)).foregroundColor(Theme.green)
                     }
-                    Button("Neu laden") { load(force: true) }.buttonStyle(JPButton())
-                        .disabled(selected == nil)
-                    Button("Sichern") { save() }.buttonStyle(JPButton(prominent: true))
+                    Button("Sichern") { save() }.buttonStyle(JPButton(prominent: dirty))
                         .disabled(selected == nil || !dirty)
                 }
-                .padding(.horizontal, 10).padding(.vertical, 7)
+                .padding(.horizontal, 8)
+                .frame(height: 34)
+                .background(Theme.glass2)
                 Divider().overlay(Theme.stroke2)
 
                 if selected == nil {
@@ -170,12 +187,19 @@ struct CodePane: View {
                 } else if isImage(selected!) {
                     imageView(selected!)
                 } else {
-                    CodeTextView(text: $text, onChange: { dirty = true })
+                    SyntaxTextView(text: $text,
+                                   language: Syntax.language(for: selected),
+                                   onChange: { dirty = true },
+                                   onSave: { save() })
                 }
             }
             .frame(minWidth: 300)
         }
-        .onChange(of: selected) { _, _ in load(force: true) }
+        .onChange(of: selected) { _, u in
+            if let u, !openTabs.contains(u) { openTabs.append(u) }
+            if openTabs.count > 12 { openTabs.removeFirst(openTabs.count - 12) }
+            load(force: true)
+        }
         .onAppear { load(force: true) }
         .onChange(of: root) { _, r in tree.rebuild(root: r); selected = nil }
     }
@@ -219,59 +243,6 @@ struct CodePane: View {
     private func flash(_ s: String) {
         note = s
         Task { try? await Task.sleep(nanoseconds: 1_600_000_000); if note == s { note = nil } }
-    }
-}
-
-/// Monospace-Editor auf NSTextView-Basis, mit Tab-Einrueckung.
-struct CodeTextView: NSViewRepresentable {
-    @Binding var text: String
-    var onChange: () -> Void
-
-    func makeCoordinator() -> Coord { Coord(self) }
-
-    func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSTextView.scrollableTextView()
-        guard let tv = scroll.documentView as? NSTextView else { return scroll }
-        tv.delegate = context.coordinator
-        tv.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        tv.textColor = NSColor(Theme.text)
-        tv.backgroundColor = NSColor(Theme.bg)
-        tv.insertionPointColor = NSColor(Theme.green)
-        tv.isRichText = false
-        tv.allowsUndo = true
-        tv.isAutomaticQuoteSubstitutionEnabled = false
-        tv.isAutomaticDashSubstitutionEnabled = false
-        tv.isAutomaticTextReplacementEnabled = false
-        tv.isAutomaticSpellingCorrectionEnabled = false
-        tv.textContainerInset = NSSize(width: 8, height: 8)
-        tv.isHorizontallyResizable = true
-        tv.textContainer?.widthTracksTextView = false
-        tv.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
-                                                 height: CGFloat.greatestFiniteMagnitude)
-        scroll.hasHorizontalScroller = true
-        scroll.drawsBackground = true
-        scroll.backgroundColor = NSColor(Theme.bg)
-        return scroll
-    }
-
-    func updateNSView(_ scroll: NSScrollView, context: Context) {
-        context.coordinator.parent = self
-        guard let tv = scroll.documentView as? NSTextView else { return }
-        if tv.string != text {
-            let sel = tv.selectedRange()
-            tv.string = text
-            tv.setSelectedRange(NSRange(location: min(sel.location, text.utf16.count), length: 0))
-        }
-    }
-
-    final class Coord: NSObject, NSTextViewDelegate {
-        var parent: CodeTextView
-        init(_ p: CodeTextView) { parent = p }
-        func textDidChange(_ n: Notification) {
-            guard let tv = n.object as? NSTextView else { return }
-            parent.text = tv.string
-            parent.onChange()
-        }
     }
 }
 

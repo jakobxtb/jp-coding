@@ -63,7 +63,7 @@ struct ContentView: View {
             // Beim ersten Start den Grundstock im Hintergrund pruefen,
             // damit die Modellliste sofort echte Zustaende zeigt.
             if probe.workingModels().isEmpty && !probe.sweepRunning {
-                probe.sweep(store.curated, timeout: 130)
+                probe.sweep(store.curated, timeout: 90)
             }
             startStatusLoop()
         }
@@ -514,7 +514,13 @@ struct ContentView: View {
 
     private func setModel(_ m: String) {
         store.state.model = m; store.saveState()
-        if var c = chat { c.model = m; store.save(c) }
+        if var c = chat {
+            let hadSession = c.sessionId != nil && c.sessionModel != nil && c.sessionModel != m
+            c.model = m; store.save(c)
+            if hadSession {
+                store.say("Neue Sitzung mit " + shortModel(m) + " - Verlauf wird mitgegeben")
+            }
+        }
     }
 
     /// Erst bekannte Treffer, dann der Grundstock der Reihe nach.
@@ -591,6 +597,14 @@ struct ContentView: View {
                    + files.map { "- " + $0 }.joined(separator: "\n") + "\n\n" + raw
         }
 
+        // Gedaechtnis: laesst sich die Sitzung nicht fortsetzen (erste Nachricht
+        // oder Modellwechsel), bekommt das Modell den Verlauf als Kontext mit.
+        let canResume = (c.sessionId?.isEmpty == false) && (c.sessionModel == c.model)
+        if !canResume && !c.messages.isEmpty {
+            prompt = Store.transcript(c) + "\n" + prompt
+            Log.w("kein resume moeglich - Verlauf mit \(c.messages.count) Nachrichten mitgegeben")
+        }
+
         history.append(raw); historyIdx = history.count
         c.messages.append(Message(role: "user", text: raw, files: files))
         if c.title == "Neuer Chat" {
@@ -624,7 +638,14 @@ struct ContentView: View {
         switch e {
         case .initialized(_, _, let sid, let slash):
             if !slash.isEmpty { store.slashCommands = slash }
-            if var c = chat, let sid, c.sessionId != sid { c.sessionId = sid; store.save(c) }
+            if var c = chat, let sid, !sid.isEmpty {
+                if c.sessionId != sid || c.sessionModel != c.model {
+                    c.sessionId = sid
+                    c.sessionModel = c.model
+                    store.save(c)
+                    Log.w("session gemerkt: \(sid) modell=\(c.model)")
+                }
+            }
         case .text(let t): liveText += t
         case .tool(let n, let i): liveTools.append(ToolCall(name: n, input: i))
         case .toolResult(let r):

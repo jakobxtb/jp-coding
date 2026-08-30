@@ -37,7 +37,11 @@ final class Runner: ObservableObject {
                     "-p", "--output-format", "stream-json", "--verbose",
                     "--model", chat.model,
                     "--permission-mode", chat.permission]
-        if let sid = chat.sessionId, !sid.isEmpty { args += ["--resume", sid] }
+        // Fortsetzen nur, wenn die Sitzung vom selben Modell stammt. Eine Sitzung
+        // eines anderen Anbieters laesst sich nicht zuverlaessig weiterfuehren.
+        let canResume = (chat.sessionId?.isEmpty == false) && (chat.sessionModel == chat.model)
+        if canResume, let sid = chat.sessionId { args += ["--resume", sid] }
+        Log.w("runner: resume=\(canResume ? "ja" : "nein") sid=\(chat.sessionId ?? "-") sessionModel=\(chat.sessionModel ?? "-")")
 
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/sandbox-exec")
@@ -103,6 +107,15 @@ final class Runner: ObservableObject {
         }
         Log.w("runner: Process gestartet nach \(String(format: "%.2f", Date().timeIntervalSince(t0)))s pid=\(p.processIdentifier)")
         proc = p; running = true
+
+        // Sicherheitsnetz: haengt der Prozess, wird er beendet, damit die
+        // Oberflaeche nicht stumm wartet.
+        let hardLimit: TimeInterval = 300
+        DispatchQueue.global().asyncAfter(deadline: .now() + hardLimit) { [weak p] in
+            guard let p, p.isRunning else { return }
+            Log.w("runner: harte Zeitgrenze \(Int(hardLimit))s erreicht, beende Prozess")
+            p.terminate()
+        }
 
         if let d = prompt.data(using: .utf8) {
             inPipe.fileHandleForWriting.write(d)
