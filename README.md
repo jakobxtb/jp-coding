@@ -17,8 +17,30 @@ als Chips im Verlauf.
 **Modellwahl, die nicht lügt** — die App testet Modelle selbst gegen den Proxy und zeigt
 pro Eintrag den echten Zustand: grüner Haken mit Antwortzeit, rotes Kreuz mit Begründung,
 oder ehrliches Fragezeichen. Beim Wechsel wird sofort geprüft; antwortet das Modell nicht,
-sucht die App automatisch ein funktionierendes. Massentest per Knopfdruck, Ergebnisse
-werden gespeichert.
+sucht die App automatisch ein funktionierendes. Ein Fehlschlag wird einmal wiederholt,
+bevor ein Modell als defekt gilt — NVIDIAs Gratis-Modelle schwanken von Lauf zu Lauf.
+
+### Mitgelieferter Grundstock
+
+Alle acht am 30.08.2026 gegen NVIDIA verifiziert, jeweils mit funktionierendem
+Tool-Calling (Voraussetzung für den Agenten). `[fast]` heißt: Reasoning abgeschaltet.
+
+| Modell | Antwort |
+|---|---|
+| `[fast]` nemotron-3-nano-30b | 0,9 s |
+| `[think]` nemotron-3-nano-omni-30b-reasoning | 2,0 s |
+| `[fast]` nemotron-3-super-120b | 3,8 s |
+| `[think]` nemotron-3.5-lightning-30b | 5,2 s |
+| `[fast]` minimax-m3 | 6,3 s |
+| `[think]` gpt-oss-20b | 6,7 s |
+| `[fast]` nemotron-3-ultra-550b | 41 s |
+| `[fast]` gpt-oss-120b | langsam, aber funktioniert |
+
+Von 69 Chat-Modellen, die NVIDIA listet, antworten nur 13 überhaupt — der Rest liefert
+HTTP 404 („Function not found"), 410 oder läuft in einen Timeout. Nicht nutzbar sind
+unter anderem DeepSeek-v4, Mistral-Large, Qwen3, Llama-Nemotron und Kimi-k2.6.
+**GLM gibt es bei NVIDIA nicht mehr** — dafür einen Z.AI-Schlüssel in den Einstellungen
+hinterlegen, dann erscheinen die GLM-Modelle von allein in der Liste.
 
 **Slash-Befehle im Eingabefeld** — `/` öffnet die Liste, Pfeiltasten navigieren, Tab
 vervollständigt. Fünfzehn App-Befehle (`/new`, `/model`, `/code`, `/preview`, `/skills` …)

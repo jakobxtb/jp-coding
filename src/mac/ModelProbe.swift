@@ -43,11 +43,19 @@ final class ModelProbe: ObservableObject {
     func isTesting(_ m: String) -> Bool { testing.contains(m) }
 
     /// Einzelnes Modell testen und Ergebnis merken.
+    /// NVIDIAs Gratis-Modelle schwanken stark, deshalb ein zweiter Versuch,
+    /// bevor ein Modell als defekt gilt.
     @discardableResult
     func test(_ model: String, timeout: TimeInterval = 130) async -> ModelResult {
         testing.insert(model)
         let t0 = Date()
-        let (ok, detail) = await Backend.testModel(model, timeout: timeout)
+        var (ok, detail) = await Backend.testModel(model, timeout: timeout)
+        if !ok {
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            let second = await Backend.testModel(model, timeout: timeout)
+            if second.0 { ok = true; detail = second.1 }
+            else { detail = second.1 }
+        }
         let r = ModelResult(ok: ok, ms: Int(Date().timeIntervalSince(t0) * 1000),
                             detail: detail, checkedAt: Date())
         results[model] = r

@@ -1,9 +1,10 @@
 [
   "claude-3-freecc-no-thinking/nvidia_nim/nvidia/nemotron-3-nano-30b-a3b",
-  "claude-3-freecc-no-thinking/nvidia_nim/openai/gpt-oss-20b",
   "claude-3-freecc-no-thinking/nvidia_nim/nvidia/nemotron-3-super-120b-a12b",
-  "claude-3-freecc-no-thinking/nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b",
+  "anthropic/nvidia_nim/openai/gpt-oss-20b",
   "claude-3-freecc-no-thinking/nvidia_nim/openai/gpt-oss-120b",
-  "anthropic/nvidia_nim/nvidia/nemotron-3-super-120b-a12b",
-  "anthropic/nvidia_nim/openai/gpt-oss-120b"
+  "claude-3-freecc-no-thinking/nvidia_nim/minimaxai/minimax-m3",
+  "anthropic/nvidia_nim/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+  "anthropic/nvidia_nim/nvidia/nemotron-3.5-lightning-30b-a3b",
+  "claude-3-freecc-no-thinking/nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
 ]
