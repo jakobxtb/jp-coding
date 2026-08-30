@@ -4,28 +4,46 @@ enum Backend {
 
     // MARK: - .env
 
+    /// Alle Anbieter, die der Proxy kennt. `slug` ist die Kennung in den Modell-IDs.
     static let providers: [ProviderKey] = [
-        ProviderKey(key: "NVIDIA_NIM_API_KEY", label: "NVIDIA NIM",
-                    url: "https://build.nvidia.com/settings/api-keys", required: true),
-        ProviderKey(key: "OPENROUTER_API_KEY", label: "OpenRouter",
-                    url: "https://openrouter.ai/keys", required: false),
-        ProviderKey(key: "GROQ_API_KEY", label: "Groq",
-                    url: "https://console.groq.com/keys", required: false),
-        ProviderKey(key: "CEREBRAS_API_KEY", label: "Cerebras",
-                    url: "https://cloud.cerebras.ai", required: false),
-        ProviderKey(key: "GEMINI_API_KEY", label: "Google Gemini",
-                    url: "https://aistudio.google.com/apikey", required: false),
-        ProviderKey(key: "DEEPSEEK_API_KEY", label: "DeepSeek",
-                    url: "https://platform.deepseek.com/api_keys", required: false),
-        ProviderKey(key: "MISTRAL_API_KEY", label: "Mistral",
-                    url: "https://console.mistral.ai/", required: false),
-        ProviderKey(key: "ZAI_API_KEY", label: "Z.AI (GLM)",
-                    url: "https://z.ai/manage-apikey/apikey-list", required: false),
-        ProviderKey(key: "KIMI_API_KEY", label: "Moonshot (Kimi)",
+        ProviderKey(slug: "nvidia_nim", key: "NVIDIA_NIM_API_KEY", label: "NVIDIA NIM",
+                    url: "https://build.nvidia.com/settings/api-keys", required: true,
+                    free: "kostenlos, aber wechselhaft"),
+        ProviderKey(slug: "groq", key: "GROQ_API_KEY", label: "Groq",
+                    url: "https://console.groq.com/keys", required: false,
+                    free: "grosszuegiges Gratis-Kontingent, sehr schnell"),
+        ProviderKey(slug: "cerebras", key: "CEREBRAS_API_KEY", label: "Cerebras",
+                    url: "https://cloud.cerebras.ai", required: false,
+                    free: "Gratis-Kontingent, sehr schnell"),
+        ProviderKey(slug: "open_router", key: "OPENROUTER_API_KEY", label: "OpenRouter",
+                    url: "https://openrouter.ai/keys", required: false,
+                    free: "viele Modelle, einige gratis"),
+        ProviderKey(slug: "gemini", key: "GEMINI_API_KEY", label: "Google Gemini",
+                    url: "https://aistudio.google.com/apikey", required: false,
+                    free: "Gratis-Kontingent"),
+        ProviderKey(slug: "zai", key: "ZAI_API_KEY", label: "Z.AI (GLM)",
+                    url: "https://z.ai/manage-apikey/apikey-list", required: false,
+                    free: "GLM-Modelle"),
+        ProviderKey(slug: "kimi", key: "KIMI_API_KEY", label: "Moonshot (Kimi)",
                     url: "https://platform.moonshot.ai/console/api-keys", required: false),
-        ProviderKey(key: "FIREWORKS_API_KEY", label: "Fireworks",
+        ProviderKey(slug: "deepseek", key: "DEEPSEEK_API_KEY", label: "DeepSeek",
+                    url: "https://platform.deepseek.com/api_keys", required: false),
+        ProviderKey(slug: "mistral", key: "MISTRAL_API_KEY", label: "Mistral",
+                    url: "https://console.mistral.ai/", required: false),
+        ProviderKey(slug: "mistral_codestral", key: "CODESTRAL_API_KEY", label: "Codestral",
+                    url: "https://console.mistral.ai/", required: false),
+        ProviderKey(slug: "fireworks", key: "FIREWORKS_API_KEY", label: "Fireworks",
                     url: "https://fireworks.ai/account/api-keys", required: false),
+        ProviderKey(slug: "opencode", key: "OPENCODE_API_KEY", label: "OpenCode Zen",
+                    url: "https://opencode.ai/auth", required: false),
+        ProviderKey(slug: "wafer", key: "WAFER_API_KEY", label: "Wafer",
+                    url: "https://www.wafer.ai/pass", required: false),
     ]
+
+    /// Anzeigename zu einer Kennung.
+    static func providerLabel(_ slug: String) -> String {
+        providers.first { $0.slug == slug }?.label ?? slug
+    }
 
     static let minEnv = """
     NVIDIA_NIM_API_KEY=

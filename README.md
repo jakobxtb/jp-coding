@@ -14,44 +14,26 @@ kein Electron: SwiftUI, ein 2-MB-Binary.
 Claude Code unter der Haube, nur mit anderem Modell-Anbieter. Werkzeugaufrufe erscheinen
 als Chips im Verlauf.
 
-**Modellwahl, die nicht lügt** — die App testet Modelle selbst gegen den Proxy und zeigt
-pro Eintrag den echten Zustand: grüner Haken mit Antwortzeit, rotes Kreuz mit Begründung,
-oder ehrliches Fragezeichen. Beim Wechsel wird sofort geprüft; antwortet das Modell nicht,
-sucht die App automatisch ein funktionierendes. Ein Fehlschlag wird einmal wiederholt,
-bevor ein Modell als defekt gilt — NVIDIAs Gratis-Modelle schwanken von Lauf zu Lauf.
+**Dreizehn Anbieter, eine Oberfläche** — NVIDIA NIM, Groq, Cerebras, OpenRouter, Google
+Gemini, Z.AI (GLM), Moonshot, DeepSeek, Mistral, Codestral, Fireworks, OpenCode und Wafer.
+In der Modellauswahl schaltest du oben zwischen ihnen um; die Liste zeigt dann nur die
+Modelle dieses Anbieters. Ein Punkt je Anbieter sagt, woran du bist: grün mit Anzahl heißt
+Modelle verfügbar, grau mit `–` heißt kein Schlüssel hinterlegt.
 
-### Mitgelieferter Grundstock
+Trägst du in den Einstellungen einen Schlüssel ein, startet der Proxy neu und die Modelle
+erscheinen von allein — es gibt keine gepflegte Liste, die veralten könnte. **Groq und
+Cerebras haben großzügige Gratis-Kontingente und deutlich zuverlässigeres Tool-Calling
+als NVIDIAs Gratis-Modelle.**
 
-Sieben Modelle, jedes daraufhin geprüft, dass es **echte Werkzeugaufrufe** erzeugt —
-also durch die Claude-Code-CLI mit vollem System-Prompt eine Datei anlegt. Ein Modell,
-das nur Text zurückgibt, ist als Agent nutzlos.
+**Modellwahl, die nicht lügt** — die App testet jedes Modell über die echte Claude-Code-CLI
+und verlangt einen **echten Werkzeugaufruf**: Das Modell muss eine Datei anlegen. Wer nur
+Text zurückgibt, ist als Agent nutzlos und wird rot markiert. Grüner Haken mit Zeit, rotes
+Kreuz mit Begründung, Fragezeichen für ungetestet. Beim Wechsel wird sofort geprüft; fällt
+das Modell aus, sucht die App automatisch ein funktionierendes. Ein Fehlschlag wird einmal
+wiederholt — die Gratis-Modelle schwanken von Lauf zu Lauf.
 
-| Modell | Werkzeugaufruf |
-|---|---|
-| nemotron-3-nano-30b | 8,0 s |
-| nemotron-3.5-lightning-30b | 8,2 s |
-| gpt-oss-20b | 8,4 s |
-| nemotron-3-super-120b | 8,7 s |
-| llama-3.2-11b-vision | 8,8 s |
-| gpt-oss-120b | 10,4 s |
-| nemotron-3-nano-omni-reasoning | 12,1 s |
-
-Von 63 Chat-Modellen, die NVIDIA listet, sind je nach Tageszeit nur 8 bis 13 erreichbar;
-der Rest gibt `HTTP 404 – Function not found` oder `410 Gone`. Nicht nutzbar sind
-DeepSeek-v4, Mistral-Large, Qwen3, Llama-Nemotron, Kimi und MiniMax-M3.
-GLM gibt es bei NVIDIA nicht mehr.
-
-**Mehr und bessere Modelle** bekommst du über weitere Anbieter: Groq, Cerebras, Google
-Gemini und OpenRouter haben großzügige Gratis-Kontingente und deutlich zuverlässigeres
-Tool-Calling, Z.AI liefert GLM. Schlüssel in den Einstellungen eintragen — die Modelle
-erscheinen dann von allein.
-
-### Gedächtnis
-
-Die App setzt die Claude-Code-Sitzung fort, solange das Modell dasselbe bleibt. Wechselst
-du mitten im Gespräch das Modell, lässt sich die Sitzung des anderen Anbieters nicht
-fortsetzen — dann bekommt das neue Modell den bisherigen Verlauf als Kontext mit. In
-beiden Fällen bleibt der Gesprächsfaden erhalten.
+Der Schalter **Reasoning** entscheidet, ob das Modell mit oder ohne Denkphase läuft. Aus ist
+für Agentenbetrieb fast immer besser: gpt-oss-20b antwortet damit in 2,4 s statt 62 s.
 
 **Slash-Befehle im Eingabefeld** — `/` öffnet die Liste, Pfeiltasten navigieren, Tab
 vervollständigt. Fünfzehn App-Befehle (`/new`, `/model`, `/code`, `/preview`, `/skills` …)

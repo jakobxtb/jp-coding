@@ -8,36 +8,89 @@ struct ModelSheet: View {
 
     @State private var query = ""
     @State private var onlyWorking = false
+    @State private var reasoning = false
+    @State private var provider = ""
+    @State private var keys: [ProviderKey] = []
 
-    private var others: [String] {
-        store.models.filter { $0.hasPrefix("anthropic/") && !store.curated.contains($0) }
+    private var prefix: String {
+        reasoning ? "anthropic/" : "claude-3-freecc-no-thinking/"
     }
-    private func visible(_ list: [String]) -> [String] {
-        var l = list
-        if !query.isEmpty { l = l.filter { $0.localizedCaseInsensitiveContains(query) } }
-        if onlyWorking { l = l.filter { probe.result(for: $0)?.ok == true } }
-        return l
+
+    /// Modelle je Anbieter, auf den Grundnamen dedupliziert.
+    private var byProvider: [String: [String]] {
+        var out: [String: Set<String>] = [:]
+        for id in store.models {
+            let parts = id.components(separatedBy: "/")
+            guard parts.count >= 3 else { continue }
+            out[parts[1], default: []].insert(parts.dropFirst(2).joined(separator: "/"))
+        }
+        return out.mapValues { Array($0).sorted() }
+    }
+
+    private var activeProvider: String {
+        if !provider.isEmpty { return provider }
+        let cur = Store.providerSlug(store.state.model)
+        return cur.isEmpty ? (byProvider.keys.sorted().first ?? "nvidia_nim") : cur
+    }
+
+    private func fullID(_ base: String) -> String { prefix + activeProvider + "/" + base }
+
+    private var visibleModels: [String] {
+        var list = byProvider[activeProvider] ?? []
+        if !query.isEmpty { list = list.filter { $0.localizedCaseInsensitiveContains(query) } }
+        if onlyWorking { list = list.filter { probe.result(for: fullID($0))?.ok == true } }
+        return list
+    }
+
+    private var curatedBases: Set<String> {
+        Set(store.curated
+            .filter { Store.providerSlug($0) == activeProvider }
+            .compactMap { id -> String? in
+                let p = id.components(separatedBy: "/")
+                return p.count >= 3 ? p.dropFirst(2).joined(separator: "/") : nil
+            })
     }
 
     var body: some View {
-        SheetFrame(title: "MODELL WAEHLEN", width: 780, height: 600) {
+        SheetFrame(title: "MODELL WAEHLEN", width: 820, height: 640) {
             VStack(spacing: 0) {
+                providerBar
+                Divider().overlay(Theme.stroke2)
                 controls
                 Divider().overlay(Theme.stroke2)
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 5) {
-                        section("Mitgeliefert (Grundstock)", visible(store.curated))
-                        section("Alle uebrigen (\(others.count) bei NVIDIA gemeldet)", visible(others))
-                        if store.models.isEmpty {
-                            Text("Keine Modellliste vom Proxy. Ist er online?")
-                                .font(Theme.f(11)).foregroundColor(Theme.muted).padding(.top, 12)
-                        }
-                    }
-                    .padding(.horizontal, 18).padding(.vertical, 12)
-                }
+                list
             }
         }
-        .task { await store.refreshModels() }
+        .task {
+            await store.refreshModels()
+            keys = Backend.providers.map { p in
+                var q = p; q.isSet = !Backend.envValue(p.key).isEmpty; return q
+            }
+        }
+    }
+
+    private var providerBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(keys) { p in
+                    let count = byProvider[p.slug]?.count ?? 0
+                    let on = activeProvider == p.slug
+                    Button { provider = p.slug; query = "" } label: {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(count > 0 ? Theme.green : (p.isSet ? Theme.warn : Theme.muted.opacity(0.4)))
+                                .frame(width: 6, height: 6)
+                            Text(p.label).font(Theme.f(11, on ? .semibold : .regular))
+                            Text(count > 0 ? "\(count)" : (p.isSet ? "0" : "–"))
+                                .font(Theme.f(9.5)).foregroundColor(Theme.muted)
+                        }
+                    }
+                    .buttonStyle(JPButton(prominent: on))
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+        }
+        .frame(height: 48)
     }
 
     private var controls: some View {
@@ -50,55 +103,105 @@ struct ModelSheet: View {
                         .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.stroke2, lineWidth: 1)))
                 Toggle("nur funktionierende", isOn: $onlyWorking)
                     .toggleStyle(.checkbox).font(Theme.f(11)).foregroundColor(Theme.muted)
+                Toggle("Reasoning", isOn: $reasoning)
+                    .toggleStyle(.checkbox).font(Theme.f(11)).foregroundColor(Theme.muted)
+                    .help("Aus ist fuer Agentenbetrieb meist besser und schneller")
             }
             HStack(spacing: 8) {
                 if probe.sweepRunning {
                     Button("Abbrechen") { probe.cancelSweep() }.buttonStyle(JPButton(danger: true))
                     ProgressView(value: Double(probe.sweepDone), total: Double(max(1, probe.sweepTotal)))
-                        .frame(width: 150)
-                    Text("\(probe.sweepDone)/\(probe.sweepTotal) getestet")
+                        .frame(width: 130)
+                    Text("\(probe.sweepDone)/\(probe.sweepTotal)")
                         .font(Theme.f(10.5)).foregroundColor(Theme.muted)
                 } else {
-                    Button("Grundstock testen") {
-                        probe.sweep(store.curated, timeout: 90)
-                    }.buttonStyle(JPButton(prominent: true))
-                    Button("ALLE testen (dauert)") {
-                        probe.sweep(store.curated + others, timeout: 60)
-                    }.buttonStyle(JPButton())
-                    let ok = probe.workingModels().count
-                    Text("\(ok) bestaetigt funktionierend")
+                    Button("Sichtbare testen") {
+                        probe.sweep(Array(visibleModels.prefix(12)).map { fullID($0) }, timeout: 90)
+                    }
+                    .buttonStyle(JPButton(prominent: true))
+                    .disabled(visibleModels.isEmpty)
+                    let ok = probe.workingModels().filter { Store.providerSlug($0) == activeProvider }.count
+                    Text("\(ok) bestaetigt bei \(Backend.providerLabel(activeProvider))")
                         .font(Theme.f(10.5)).foregroundColor(ok > 0 ? Theme.green : Theme.muted)
                 }
                 Spacer()
             }
         }
-        .padding(.horizontal, 18).padding(.vertical, 12)
+        .padding(.horizontal, 16).padding(.vertical, 11)
     }
 
-    private func section(_ title: String, _ list: [String]) -> some View {
-        Group {
-            if !list.isEmpty {
-                Text(title).font(Theme.f(10)).foregroundColor(Theme.muted).tracking(1.2)
-                    .padding(.top, 8).padding(.bottom, 2)
-                ForEach(list, id: \.self) { m in row(m) }
+    @ViewBuilder private var list: some View {
+        if visibleModels.isEmpty {
+            emptyState.frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 5) {
+                    let curated = visibleModels.filter { curatedBases.contains($0) }
+                    let rest = visibleModels.filter { !curatedBases.contains($0) }
+                    if !curated.isEmpty {
+                        header("Getestet und empfohlen")
+                        ForEach(curated, id: \.self) { row($0) }
+                    }
+                    if !rest.isEmpty {
+                        header(curated.isEmpty ? "Verfuegbar (\(rest.count))"
+                                               : "Weitere (\(rest.count), ungetestet)")
+                        ForEach(rest, id: \.self) { row($0) }
+                    }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
             }
         }
     }
 
-    private func row(_ m: String) -> some View {
-        let active = m == store.state.model
-        let r = probe.result(for: m)
-        let busy = probe.isTesting(m)
+    private func header(_ t: String) -> some View {
+        Text(t).font(Theme.f(10)).foregroundColor(Theme.muted).tracking(1.2)
+            .padding(.top, 6).padding(.bottom, 2)
+    }
+
+    private var emptyState: some View {
+        let p = keys.first { $0.slug == activeProvider }
+        return VStack(spacing: 12) {
+            Image(systemName: (p?.isSet ?? false) ? "exclamationmark.triangle" : "key")
+                .font(.system(size: 26)).foregroundColor(Theme.muted.opacity(0.6))
+            if let p, !p.isSet {
+                Text("Kein Schluessel fuer \(p.label)")
+                    .font(Theme.f(13)).foregroundColor(Theme.text)
+                if !p.free.isEmpty {
+                    Text(p.free).font(Theme.f(11)).foregroundColor(Theme.green.opacity(0.85))
+                }
+                Text("Schluessel in den Einstellungen eintragen. Danach startet der Proxy neu\nund die Modelle dieses Anbieters erscheinen hier automatisch.")
+                    .font(Theme.f(11)).foregroundColor(Theme.muted)
+                    .multilineTextAlignment(.center).lineSpacing(4)
+                Link("Schluessel holen", destination: URL(string: p.url)!)
+                    .font(Theme.f(11.5)).foregroundColor(Theme.green)
+            } else if let p {
+                Text("Schluessel fuer \(p.label) gesetzt, aber keine Modelle gemeldet")
+                    .font(Theme.f(12.5)).foregroundColor(Theme.text)
+                Text("Der Anbieter lehnt den Schluessel moeglicherweise ab.\nEinstellungen > System > Proxy neu starten, dann erneut pruefen.")
+                    .font(Theme.f(11)).foregroundColor(Theme.muted)
+                    .multilineTextAlignment(.center).lineSpacing(4)
+            } else {
+                Text("Keine Modelle").font(Theme.f(12)).foregroundColor(Theme.muted)
+            }
+        }
+        .padding(30)
+    }
+
+    private func row(_ base: String) -> some View {
+        let id = fullID(base)
+        let active = id == store.state.model
+        let r = probe.result(for: id)
+        let busy = probe.isTesting(id)
         return HStack(spacing: 9) {
             Image(systemName: active ? "largecircle.fill.circle" : "circle")
                 .font(.system(size: 11))
                 .foregroundColor(active ? Theme.green : Theme.muted.opacity(0.45))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(Store.shortModel(m))
-                    .font(Theme.f(12)).foregroundColor(active ? Theme.green : Theme.text).lineLimit(1)
+                Text(base).font(Theme.f(12))
+                    .foregroundColor(active ? Theme.green : Theme.text).lineLimit(1)
                 if let r {
-                    Text(r.ok ? "antwortet in \(String(format: "%.1f", Double(r.ms)/1000))s"
+                    Text(r.ok ? "Werkzeuge OK in \(String(format: "%.1f", Double(r.ms)/1000))s"
                               + (r.ms > 20000 ? "  (langsam)" : "") + "  ·  \(r.age)"
                               : "faellt aus: \(r.detail)  ·  \(r.age)")
                         .font(Theme.f(9.5))
@@ -112,13 +215,12 @@ struct ModelSheet: View {
                 ProgressView().controlSize(.small).scaleEffect(0.6).frame(width: 30)
             } else if let r {
                 Image(systemName: r.ok ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .font(.system(size: 12))
-                    .foregroundColor(r.ok ? Theme.green : Theme.red)
+                    .font(.system(size: 12)).foregroundColor(r.ok ? Theme.green : Theme.red)
             } else {
                 Text("?").font(Theme.f(11)).foregroundColor(Theme.muted.opacity(0.6)).frame(width: 12)
             }
 
-            Button("TEST") { Task { await probe.test(m) } }
+            Button("TEST") { Task { await probe.test(id) } }
                 .buttonStyle(JPButton()).disabled(busy || probe.sweepRunning)
         }
         .padding(.horizontal, 11).padding(.vertical, 8)
@@ -127,7 +229,7 @@ struct ModelSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 9)
                 .strokeBorder(active ? Theme.green.opacity(0.3) : Theme.stroke2, lineWidth: 1)))
         .contentShape(Rectangle())
-        .onTapGesture { onPick(m); dismiss() }
+        .onTapGesture { onPick(id); dismiss() }
         .opacity(r?.ok == false ? 0.62 : 1)
     }
 }

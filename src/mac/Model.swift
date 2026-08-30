@@ -60,12 +60,15 @@ struct SkillItem: Identifiable, Hashable {
 
 struct ProviderKey: Identifiable {
     var id: String { key }
+    /// Kennung, wie sie in Modell-IDs auftaucht (z.B. "nvidia_nim").
+    var slug: String
     var key: String
     var label: String
     var url: String
     var required: Bool
     var isSet: Bool = false
     var masked: String = ""
+    var free: String = ""
 }
 
 // MARK: - Pfade
@@ -232,6 +235,12 @@ final class Store: ObservableObject {
         lines.append("")
         lines.append("--- Neue Nachricht des Nutzers ---")
         return lines.joined(separator: "\n")
+    }
+
+    /// Anbieter-Kennung aus einer Modell-ID: "anthropic/groq/llama-3.3" -> "groq"
+    static func providerSlug(_ id: String) -> String {
+        let parts = id.components(separatedBy: "/")
+        return parts.count >= 3 ? parts[1] : ""
     }
 
     static func shortModel(_ m: String) -> String {
