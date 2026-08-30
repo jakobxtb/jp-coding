@@ -22,25 +22,32 @@ bevor ein Modell als defekt gilt — NVIDIAs Gratis-Modelle schwanken von Lauf z
 
 ### Mitgelieferter Grundstock
 
-Alle acht am 30.08.2026 gegen NVIDIA verifiziert, jeweils mit funktionierendem
-Tool-Calling (Voraussetzung für den Agenten). `[fast]` heißt: Reasoning abgeschaltet.
+Sieben Modelle, jedes **im echten Agenten** geprüft — also durch die Claude-Code-CLI mit
+vollem System-Prompt und allen Werkzeugdefinitionen, nicht nur mit einer kleinen
+API-Anfrage. Genau das ist der Unterschied: Modelle bestehen den kleinen Test und
+scheitern trotzdem am Agenten.
 
-| Modell | Antwort |
+| Modell | Antwort im Agenten |
 |---|---|
-| `[fast]` nemotron-3-nano-30b | 0,9 s |
-| `[think]` nemotron-3-nano-omni-30b-reasoning | 2,0 s |
-| `[fast]` nemotron-3-super-120b | 3,8 s |
-| `[think]` nemotron-3.5-lightning-30b | 5,2 s |
-| `[fast]` minimax-m3 | 6,3 s |
-| `[think]` gpt-oss-20b | 6,7 s |
-| `[fast]` nemotron-3-ultra-550b | 41 s |
-| `[fast]` gpt-oss-120b | langsam, aber funktioniert |
+| gpt-oss-120b | 4,3 s |
+| nemotron-3-nano-30b | 2,8 s |
+| gpt-oss-20b | 3,1 s |
+| nemotron-3-super-120b | 5,1 s |
+| nemotron-3-nano-omni-reasoning | 7,5 s |
+| nemotron-3.5-lightning-30b | 8,3 s |
+| llama-3.2-11b-vision | 29,5 s |
 
-Von 69 Chat-Modellen, die NVIDIA listet, antworten nur 13 überhaupt — der Rest liefert
-HTTP 404 („Function not found"), 410 oder läuft in einen Timeout. Nicht nutzbar sind
-unter anderem DeepSeek-v4, Mistral-Large, Qwen3, Llama-Nemotron und Kimi-k2.6.
-**GLM gibt es bei NVIDIA nicht mehr** — dafür einen Z.AI-Schlüssel in den Einstellungen
-hinterlegen, dann erscheinen die GLM-Modelle von allein in der Liste.
+Alle laufen mit abgeschaltetem Reasoning (`[fast]`) — das ist für Agentenbetrieb
+durchweg die bessere Variante.
+
+Von 63 Chat-Modellen, die NVIDIA listet, sind je nach Tageszeit nur 8 bis 13 erreichbar;
+der Rest gibt `HTTP 404 – Function not found` oder `410 Gone`. Nicht agententauglich sind
+DeepSeek-v4, Mistral-Large, Qwen3, Llama-Nemotron, Kimi (`Invalid request sent to
+provider`), MiniMax-M3 (Anbieter-Limit) und nemotron-3-ultra.
+
+**Mehr Modelle bekommst du über weitere Anbieter**: Groq, Cerebras, Google Gemini und
+OpenRouter haben großzügige Gratis-Kontingente, Z.AI liefert GLM. Schlüssel in den
+Einstellungen eintragen — die Modelle erscheinen dann von allein in der Liste.
 
 **Slash-Befehle im Eingabefeld** — `/` öffnet die Liste, Pfeiltasten navigieren, Tab
 vervollständigt. Fünfzehn App-Befehle (`/new`, `/model`, `/code`, `/preview`, `/skills` …)

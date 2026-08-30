@@ -247,6 +247,71 @@ enum Backend {
         return (true, String(trimmed.prefix(40)))
     }
 
+    /// Echter Test: startet Claude Code genau so wie der Chat es tut.
+    /// Eine blosse API-Anfrage sagt nichts aus - Modelle scheitern erst am
+    /// grossen System-Prompt mit allen Werkzeugdefinitionen.
+    static func testModelViaAgent(_ model: String, timeout: TimeInterval = 120) async -> (Bool, String) {
+        guard let claude = claudeBin else { return (false, "Claude Code CLI fehlt") }
+        let profile = writeProfile()
+        return await withCheckedContinuation { cont in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let p = Process()
+                p.executableURL = URL(fileURLWithPath: "/usr/bin/sandbox-exec")
+                p.arguments = ["-f", profile.path, claude, "-p",
+                               "--output-format", "stream-json", "--verbose",
+                               "--model", model, "--permission-mode", "bypassPermissions"]
+                p.currentDirectoryURL = Paths.home.appendingPathComponent("Downloads")
+                var env = ProcessInfo.processInfo.environment
+                for k in env.keys where k.hasPrefix("ANTHROPIC_") { env.removeValue(forKey: k) }
+                env["ANTHROPIC_BASE_URL"] = proxyBase
+                env["ANTHROPIC_AUTH_TOKEN"] = authToken
+                env["CLAUDE_CONFIG_DIR"] = Paths.config.path
+                env["PATH"] = "\(Paths.localBin.path):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+                p.environment = env
+                let inP = Pipe(), outP = Pipe(), errP = Pipe()
+                p.standardInput = inP; p.standardOutput = outP; p.standardError = errP
+                do { try p.run() } catch {
+                    cont.resume(returning: (false, "Start fehlgeschlagen")); return
+                }
+                inP.fileHandleForWriting.write("Antworte mit genau: OK".data(using: .utf8)!)
+                try? inP.fileHandleForWriting.close()
+
+                let deadline = DispatchTime.now() + timeout
+                let killer = DispatchWorkItem { if p.isRunning { p.terminate() } }
+                DispatchQueue.global().asyncAfter(deadline: deadline, execute: killer)
+
+                let data = outP.fileHandleForReading.readDataToEndOfFile()
+                _ = errP.fileHandleForReading.readDataToEndOfFile()
+                p.waitUntilExit()
+                killer.cancel()
+
+                var text = ""
+                for line in String(data: data, encoding: .utf8)?.components(separatedBy: .newlines) ?? [] {
+                    guard let d = line.data(using: .utf8),
+                          let e = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+                          e["type"] as? String == "assistant",
+                          let msg = e["message"] as? [String: Any],
+                          let blocks = msg["content"] as? [[String: Any]] else { continue }
+                    for b in blocks where b["type"] as? String == "text" {
+                        text += (b["text"] as? String) ?? ""
+                    }
+                }
+                let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if t.isEmpty {
+                    cont.resume(returning: (false, p.terminationStatus == 15 ? "Zeitüberschreitung" : "keine Antwort"))
+                    return
+                }
+                for b in badText where t.contains(b) {
+                    cont.resume(returning: (false, String(t.prefix(70)))); return
+                }
+                if t.lowercased().contains("rate limit") {
+                    cont.resume(returning: (false, "Anbieter-Limit erreicht")); return
+                }
+                cont.resume(returning: (true, String(t.prefix(40))))
+            }
+        }
+    }
+
     static func curatedModels() -> [String] {
         guard let d = try? Data(contentsOf: Paths.modelsJSON),
               let a = try? JSONDecoder().decode([String].self, from: d) else {
@@ -257,10 +322,10 @@ enum Backend {
 
     /// Prueft das aktuelle Modell, wechselt bei Ausfall auf das naechste funktionierende.
     static func repairModel(current: String) async -> (changed: Bool, model: String, broken: Bool) {
-        let (ok, _) = await testModel(current)
+        let (ok, _) = await testModelViaAgent(current)
         if ok { return (false, current, false) }
         for m in curatedModels() where m != current {
-            let (ok2, _) = await testModel(m)
+            let (ok2, _) = await testModelViaAgent(m)
             if ok2 { return (true, m, false) }
         }
         return (false, current, true)

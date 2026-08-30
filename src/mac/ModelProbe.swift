@@ -46,13 +46,13 @@ final class ModelProbe: ObservableObject {
     /// NVIDIAs Gratis-Modelle schwanken stark, deshalb ein zweiter Versuch,
     /// bevor ein Modell als defekt gilt.
     @discardableResult
-    func test(_ model: String, timeout: TimeInterval = 130) async -> ModelResult {
+    func test(_ model: String, timeout: TimeInterval = 120) async -> ModelResult {
         testing.insert(model)
         let t0 = Date()
-        var (ok, detail) = await Backend.testModel(model, timeout: timeout)
+        var (ok, detail) = await Backend.testModelViaAgent(model, timeout: timeout)
         if !ok {
             try? await Task.sleep(nanoseconds: 1_200_000_000)
-            let second = await Backend.testModel(model, timeout: timeout)
+            let second = await Backend.testModelViaAgent(model, timeout: timeout)
             if second.0 { ok = true; detail = second.1 }
             else { detail = second.1 }
         }
@@ -65,11 +65,13 @@ final class ModelProbe: ObservableObject {
     }
 
     /// Reihum alle uebergebenen Modelle testen, zwei gleichzeitig.
-    func sweep(_ models: [String], timeout: TimeInterval = 75) {
+    func sweep(_ models: [String], timeout: TimeInterval = 100) {
         guard !sweepRunning else { return }
         sweepRunning = true; sweepDone = 0; sweepTotal = models.count
         sweepTask = Task {
-            let maxParallel = 2
+            // Einzeln, nicht parallel: gleichzeitige Agentenlaeufe loesen beim
+            // Anbieter ein Rate-Limit aus und erzeugen falsche Ausfaelle.
+            let maxParallel = 1
             await withTaskGroup(of: Void.self) { group in
                 var next = 0
                 while next < min(maxParallel, models.count) {
