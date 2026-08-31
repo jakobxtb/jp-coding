@@ -13,6 +13,7 @@ struct ModelSheet: View {
     @State private var provider = ""
     @State private var sortByScore = true
     @State private var keys: [ProviderKey] = []
+    @State private var confirmSweep = false
 
     private var prefix: String {
         reasoning ? "anthropic/" : "claude-3-freecc-no-thinking/"
@@ -36,6 +37,16 @@ struct ModelSheet: View {
     }
 
     private func fullID(_ base: String) -> String { prefix + activeProvider + "/" + base }
+
+    private var sweepTargets: [String] { Array(visibleModels.prefix(12)).map { fullID($0) } }
+
+    /// Ein Test ist ein echter Agentenlauf und kostet bei bezahlten Anbietern Geld.
+    private var sweepCost: Double {
+        sweepTargets.reduce(0) { sum, id in
+            let base = id.components(separatedBy: "/").dropFirst(2).joined(separator: "/")
+            return sum + (pricing.info[base]?.estimatedMessageCost() ?? 0)
+        }
+    }
 
     private var visibleModels: [String] {
         var list = byProvider[activeProvider] ?? []
@@ -70,6 +81,17 @@ struct ModelSheet: View {
                 list
             }
         }
+        .confirmationDialog(
+            String(format: "%d Modelle testen fuer etwa $%.2f?", sweepTargets.count, sweepCost),
+            isPresented: $confirmSweep, titleVisibility: .visible) {
+                Button(String(format: "Testen (~$%.2f)", sweepCost)) {
+                    probe.sweep(sweepTargets, timeout: 90)
+                }
+                Button("Abbrechen", role: .cancel) { }
+            } message: {
+                Text("Jeder Test schickt einen vollstaendigen Agentenlauf mit rund 45.000 Token "
+                   + "an den Anbieter. Bei bezahlten Anbietern kostet das echtes Guthaben.")
+            }
         .task {
             await store.refreshModels()
             if pricing.info.isEmpty { await pricing.refreshOpenRouter() }
@@ -127,11 +149,15 @@ struct ModelSheet: View {
                     Text("\(probe.sweepDone)/\(probe.sweepTotal)")
                         .font(Theme.f(10.5)).foregroundColor(Theme.muted)
                 } else {
-                    Button("Sichtbare testen") {
-                        probe.sweep(Array(visibleModels.prefix(12)).map { fullID($0) }, timeout: 90)
+                    Button(sweepCost > 0.001
+                           ? String(format: "Sichtbare testen (~$%.2f)", sweepCost)
+                           : "Sichtbare testen") {
+                        if sweepCost > 0.02 { confirmSweep = true }
+                        else { probe.sweep(sweepTargets, timeout: 90) }
                     }
                     .buttonStyle(JPButton(prominent: true))
                     .disabled(visibleModels.isEmpty)
+                    .help("Jeder Test ist ein vollstaendiger Agentenlauf mit rund 45.000 Token")
                     let ok = probe.workingModels().filter { Store.providerSlug($0) == activeProvider }.count
                     Text("\(ok) bestaetigt bei \(Backend.providerLabel(activeProvider))")
                         .font(Theme.f(10.5)).foregroundColor(ok > 0 ? Theme.green : Theme.muted)

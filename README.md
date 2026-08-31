@@ -51,6 +51,20 @@ gerade nachdenkt, schreibt oder ein Werkzeug benutzt, und wie viel Text schon da
 Der Schalter **Reasoning** entscheidet, ob das Modell mit oder ohne Denkphase läuft. Aus ist
 für Agentenbetrieb fast immer besser: gpt-oss-20b antwortet damit in 2,4 s statt 62 s.
 
+**Statusleiste unten** — dauerhaft sichtbar wie in der Claude-App: Proxy-Punkt, Modell,
+Arbeitsordner, Berechtigungsstufe, und rechts entweder *bereit*, die Tokenzahl der letzten
+Antwort oder — während der Agent läuft — was er gerade tut. Dazu die Kosten des Chats und
+das freie Guthaben; ein Klick darauf öffnet die Nutzung.
+
+**Nutzungspanel** (`/usage`) — Nachrichten, Ein- und Ausgabe-Token und Kosten gesamt,
+aufgeschlüsselt nach Modell und nach Chat, plus der Kontostand beim Anbieter.
+
+**Skill gezielt einsetzen** (`/skill`) — öffnet eine durchsuchbare Liste aller aktiven
+Skills mit Beschreibung; die Auswahl landet als Auftrag im Eingabefeld.
+
+**Planmodus** — zusätzlich zu Vollzugriff, Nur-Edits und Alles-fragen gibt es den
+Planmodus: Der Agent legt erst einen Plan vor, statt sofort zu schreiben.
+
 **Slash-Befehle im Eingabefeld** — `/` öffnet die Liste, Pfeiltasten navigieren, Tab
 vervollständigt. Fünfzehn App-Befehle (`/new`, `/model`, `/code`, `/preview`, `/skills` …)
 plus alle Befehle, die die Claude-Code-CLI meldet — inklusive deiner Skills.
@@ -107,6 +121,8 @@ die Liste sofort echte Zustände zeigt.
 | Live-Vorschau | `VORSCHAU` oder `/preview` |
 | Datei anhängen | Büroklammer oder `/attach` |
 | Abbrechen | roter Knopf oder `/stop` |
+| Skill einsetzen | `/skill` |
+| Nutzung und Kosten | `/usage` |
 | Alle Befehle | `/help` |
 
 Berechtigungen stehen auf **Vollzugriff**: Der Agent darf im gewählten Ordner alles.
@@ -167,6 +183,7 @@ bricht der Start mit Fehler ab statt still ungeschützt zu laufen.
 | Modell antwortet nicht | Im Modell-Fenster *TEST* — NVIDIAs Gratis-Modelle fallen häufig aus |
 | „Proxy offline" | Einstellungen → System → *Proxy neu starten* |
 | Kein Modell erreichbar | Schlüssel prüfen oder Kontingent erschöpft |
+| Modelltest kostet Guthaben | Jeder Test ist ein vollständiger Agentenlauf mit ~45.000 Token. Bei bezahlten Anbietern fragt die App vorher nach und nennt die geschätzten Kosten |
 | OpenRouter: alle Modelle geben 404 | Im OpenRouter-Konto unter [Preferences](https://openrouter.ai/settings/preferences) die *Allowed Providers* prüfen — ist dort ein einzelner Anbieter eingetragen, lehnt OpenRouter alle anderen Modelle ab |
 | Sonstiges | Protokoll: `~/Library/Application Support/JP Coding/debug.log` |
 

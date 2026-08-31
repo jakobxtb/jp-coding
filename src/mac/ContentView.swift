@@ -29,6 +29,8 @@ struct ContentView: View {
     @State private var showModels = false
     @State private var showSetup = false
     @State private var showHelp = false
+    @State private var showUsage = false
+    @State private var showSkillPicker = false
     @State private var rightPane: RightPane = .none
     @State private var editorFile: URL? = nil
 
@@ -60,6 +62,13 @@ struct ContentView: View {
         .sheet(isPresented: $showModels)   { ModelSheet(store: store, probe: probe, pricing: pricing, onPick: applyModel) }
         .sheet(isPresented: $showSetup)    { SetupSheet(store: store) }
         .sheet(isPresented: $showHelp)     { HelpSheet(commands: Slash.merged(cli: store.slashCommands)) }
+        .sheet(isPresented: $showUsage)    { UsageSheet(store: store, pricing: pricing) }
+        .sheet(isPresented: $showSkillPicker) {
+            SkillPickerSheet { name in
+                input = "Nutze den Skill \(name) fuer folgende Aufgabe: "
+                store.say("Skill eingesetzt: " + name)
+            }
+        }
         .task {
             await store.refreshStatus()
             let s = await Backend.setupState()
@@ -245,6 +254,7 @@ struct ContentView: View {
                 set: { setPermission($0) })) {
                 Text("Vollzugriff").tag("bypassPermissions")
                 Text("Nur Edits").tag("acceptEdits")
+                Text("Planmodus").tag("plan")
                 Text("Alles fragen").tag("default")
             }
             .labelsHidden().frame(width: 130)
@@ -386,11 +396,77 @@ struct ContentView: View {
                 if popupOpen { slashPopup.offset(y: -CGFloat(slashMatches.count) * 30 - 14) }
             }
 
-            Text("Enter senden · Shift+Enter neue Zeile · / fuer Befehle · alles bleibt lokal")
-                .font(Theme.f(9.5)).foregroundColor(Theme.muted)
-                .frame(maxWidth: .infinity, alignment: .center)
+            statusBar
         }
-        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 12)
+        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 8)
+    }
+
+    /// Dauerhafte Statuszeile ganz unten, wie in der Claude-App.
+    private var statusBar: some View {
+        HStack(spacing: 0) {
+            Circle().fill(store.proxyOnline ? Theme.green : Theme.red)
+                .frame(width: 6, height: 6)
+                .shadow(color: (store.proxyOnline ? Theme.green : Theme.red).opacity(0.7), radius: 3)
+            Text(shortModel(chat?.model ?? store.state.model))
+                .foregroundColor(Theme.muted).lineLimit(1).padding(.leading, 6)
+
+            sep
+            Image(systemName: "folder").font(.system(size: 8)).foregroundColor(Theme.muted.opacity(0.7))
+            Text(chat.map { URL(fileURLWithPath: $0.cwd).lastPathComponent } ?? "—")
+                .foregroundColor(Theme.muted).lineLimit(1).padding(.leading, 4)
+
+            sep
+            Text(permLabel).foregroundColor(Theme.muted)
+
+            Spacer(minLength: 10)
+
+            if streaming {
+                HStack(spacing: 5) {
+                    ProgressView().controlSize(.small).scaleEffect(0.42).frame(width: 12, height: 9)
+                    Text(workingLabel).foregroundColor(Theme.green.opacity(0.9)).lineLimit(1)
+                }
+            } else if let last = chat?.messages.last, last.role == "assistant",
+                      let inTok = last.inputTokens {
+                Text("\(fmtTokens(inTok)) ein · \(fmtTokens(last.outputTokens ?? 0)) aus")
+                    .foregroundColor(Theme.muted)
+            } else {
+                Text("bereit").foregroundColor(Theme.muted.opacity(0.7))
+            }
+
+            if chatCost > 0 {
+                sep
+                Text("Chat " + fmtCost(chatCost)).foregroundColor(Theme.green.opacity(0.9))
+            }
+            if let c = pricing.credits {
+                sep
+                Button { showUsage = true } label: {
+                    Text(c.remaining != nil
+                         ? String(format: "$%.2f frei", c.remaining!)
+                         : String(format: "$%.4f verbraucht", c.usage))
+                        .foregroundColor(Theme.muted)
+                }
+                .buttonStyle(.plain)
+                .help("Nutzung anzeigen")
+            }
+        }
+        .font(Theme.f(9.5))
+        .padding(.horizontal, 12).padding(.vertical, 7)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.glass2)
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.stroke2, lineWidth: 1)))
+        .padding(.top, 7)
+    }
+
+    private var sep: some View {
+        Text("│").foregroundColor(Theme.muted.opacity(0.3)).padding(.horizontal, 7)
+    }
+
+    private var permLabel: String {
+        switch chat?.permission ?? store.state.permission {
+        case "bypassPermissions": return "Vollzugriff"
+        case "acceptEdits":       return "nur Edits"
+        case "plan":              return "Planmodus"
+        default:                  return "fragt nach"
+        }
     }
 
     private var inputHeight: CGFloat {
@@ -491,6 +567,8 @@ struct ContentView: View {
         case "export":      exportChat()
         case "stop":        runner.stop()
         case "help":        showHelp = true
+        case "skill":       showSkillPicker = true
+        case "usage":       showUsage = true
         case "code":        rightPane = (rightPane == .code) ? .none : .code
         case "preview":     rightPane = (rightPane == .preview) ? .none : .preview
         case "clear":       clearChat()
@@ -501,7 +579,7 @@ struct ContentView: View {
                                 store.say(ok ? "Proxy laeuft" : "Proxy nicht erreichbar", bad: !ok)
                             }
         case "permissions":
-            let order = ["bypassPermissions", "acceptEdits", "default"]
+            let order = ["bypassPermissions", "acceptEdits", "plan", "default"]
             let cur = chat?.permission ?? store.state.permission
             let next = order[((order.firstIndex(of: cur) ?? 0) + 1) % order.count]
             setPermission(next)
