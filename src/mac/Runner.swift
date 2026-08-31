@@ -6,6 +6,8 @@ enum RunEvent {
     case text(String)
     case tool(name: String, input: String)
     case toolResult(String)
+    case thinking(String)
+    case todos([TodoItem])
     case done(ms: Int?, turns: Int?, isError: Bool, input: Int, output: Int)
     case failure(String)
 }
@@ -146,11 +148,26 @@ final class Runner: ObservableObject {
         case "assistant":
             let msg = e["message"] as? [String: Any] ?? [:]
             for b in (msg["content"] as? [[String: Any]]) ?? [] {
-                if b["type"] as? String == "text", let t = b["text"] as? String, !t.isEmpty {
+                let kind = b["type"] as? String
+                if kind == "text", let t = b["text"] as? String, !t.isEmpty {
                     out.append(.text(t))
-                } else if b["type"] as? String == "tool_use" {
-                    out.append(.tool(name: b["name"] as? String ?? "tool",
-                                     input: shorten(b["input"], 190)))
+                } else if kind == "thinking", let t = b["thinking"] as? String, !t.isEmpty {
+                    out.append(.thinking(t))
+                } else if kind == "tool_use" {
+                    let name = b["name"] as? String ?? "tool"
+                    // Aufgabenliste des Agenten mitlesen, wie im echten Claude Code.
+                    if name == "TodoWrite",
+                       let inp = b["input"] as? [String: Any],
+                       let raw = inp["todos"] as? [[String: Any]] {
+                        let items = raw.compactMap { t -> TodoItem? in
+                            guard let c = t["content"] as? String else { return nil }
+                            return TodoItem(text: c,
+                                            status: (t["status"] as? String) ?? "pending",
+                                            active: (t["activeForm"] as? String) ?? "")
+                        }
+                        if !items.isEmpty { out.append(.todos(items)) }
+                    }
+                    out.append(.tool(name: name, input: shorten(b["input"], 190)))
                 }
             }
         case "user":

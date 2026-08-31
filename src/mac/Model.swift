@@ -10,6 +10,22 @@ struct ToolCall: Codable, Hashable, Identifiable {
     var result: String?
 }
 
+/// Eintrag der Aufgabenliste, die der Agent selbst pflegt.
+struct TodoItem: Codable, Hashable, Identifiable {
+    var id: String { text }
+    var text: String
+    var status: String      // pending | in_progress | completed
+    var active: String = ""
+
+    var symbol: String {
+        switch status {
+        case "completed":   return "checkmark.circle.fill"
+        case "in_progress": return "circle.dotted"
+        default:            return "circle"
+        }
+    }
+}
+
 struct Message: Codable, Identifiable, Hashable {
     var id = UUID()
     var role: String            // "user" | "assistant" | "system"
@@ -23,6 +39,7 @@ struct Message: Codable, Identifiable, Hashable {
     var inputTokens: Int? = nil
     var outputTokens: Int? = nil
     var costUSD: Double? = nil
+    var thinking: String? = nil
 
     static func now() -> String {
         let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: Date())

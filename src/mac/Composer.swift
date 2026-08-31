@@ -137,6 +137,19 @@ enum Slash {
         return starts + contains
     }
 
+    /// Liefert das Praefix nach dem letzten "@", wenn gerade eine Datei erwaehnt wird.
+    static func mention(in text: String) -> String? {
+        guard let at = text.lastIndex(of: "@") else { return nil }
+        let rest = text[text.index(after: at)...]
+        if rest.contains(" ") || rest.contains("\n") { return nil }
+        // nur wenn das @ am Wortanfang steht
+        if at > text.startIndex {
+            let before = text[text.index(before: at)]
+            if !before.isWhitespace { return nil }
+        }
+        return String(rest)
+    }
+
     /// Liefert das Praefix nach "/" wenn die Zeile ein Befehl in Eingabe ist.
     static func query(in text: String) -> String? {
         guard text.hasPrefix("/") else { return nil }

@@ -65,6 +65,16 @@ Skills mit Beschreibung; die Auswahl landet als Auftrag im Eingabefeld.
 **Planmodus** — zusätzlich zu Vollzugriff, Nur-Edits und Alles-fragen gibt es den
 Planmodus: Der Agent legt erst einen Plan vor, statt sofort zu schreiben.
 
+**Aufgabenliste** — führt der Agent eine Todo-Liste (`TodoWrite`), erscheint sie live über
+dem Eingabefeld: erledigt durchgestrichen, laufender Schritt hervorgehoben, Zähler daneben.
+Bei größeren Bauaufträgen siehst du damit jederzeit, wo er steht.
+
+**Denkschritte** — liefert das Modell eine Denkphase mit, steht sie als aufklappbarer Block
+unter der Antwort, mit Tokenzahl.
+
+**`@`-Dateierwähnungen** — `@` im Eingabefeld öffnet eine Dateiliste des Projektordners,
+Pfeiltasten und Tab wie bei den Befehlen. Ordner wie `node_modules` bleiben außen vor.
+
 **Slash-Befehle im Eingabefeld** — `/` öffnet die Liste, Pfeiltasten navigieren, Tab
 vervollständigt. Fünfzehn App-Befehle (`/new`, `/model`, `/code`, `/preview`, `/skills` …)
 plus alle Befehle, die die Claude-Code-CLI meldet — inklusive deiner Skills.
@@ -123,6 +133,7 @@ die Liste sofort echte Zustände zeigt.
 | Abbrechen | roter Knopf oder `/stop` |
 | Skill einsetzen | `/skill` |
 | Nutzung und Kosten | `/usage` |
+| Datei erwähnen | `@` im Eingabefeld |
 | Alle Befehle | `/help` |
 
 Berechtigungen stehen auf **Vollzugriff**: Der Agent darf im gewählten Ordner alles.

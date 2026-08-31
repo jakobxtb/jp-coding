@@ -19,6 +19,11 @@ struct ContentView: View {
     @State private var liveCost: Double? = nil
     @State private var liveStart: Date? = nil
     @State private var liveTick = 0
+    @State private var liveThinking = ""
+    @State private var liveTodos: [TodoItem] = []
+    @State private var showThinking = false
+    @State private var fileIndex: [String] = []
+    @State private var mentionIdx = 0
     @State private var streaming = false
     @State private var history: [String] = []
     @State private var historyIdx = 0
@@ -42,7 +47,38 @@ struct ContentView: View {
         guard let q = slashQuery else { return [] }
         return Array(Slash.filter(Slash.merged(cli: store.slashCommands), query: q).prefix(9))
     }
-    private var popupOpen: Bool { !slashMatches.isEmpty }
+    private var popupOpen: Bool { !slashMatches.isEmpty || !mentionMatches.isEmpty }
+
+    private var mentionQuery: String? { Slash.mention(in: input) }
+    private var mentionMatches: [String] {
+        guard let q = mentionQuery, slashMatches.isEmpty else { return [] }
+        let low = q.lowercased()
+        let hits = low.isEmpty ? fileIndex
+                               : fileIndex.filter { $0.lowercased().contains(low) }
+        return Array(hits.prefix(9))
+    }
+
+    /// Dateien des Arbeitsordners fuer @-Erwaehnungen, einmal je Chat eingelesen.
+    private func buildFileIndex() {
+        guard let root = chat?.cwd else { fileIndex = []; return }
+        let skip: Set<String> = [".git", "node_modules", ".venv", "__pycache__",
+                                 ".next", "dist", "build", ".cache", "Pods"]
+        var out: [String] = []
+        let base = URL(fileURLWithPath: root)
+        if let en = FileManager.default.enumerator(at: base,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]) {
+            for case let u as URL in en {
+                if skip.contains(u.lastPathComponent) { en.skipDescendants(); continue }
+                let isDir = (try? u.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+                if isDir { continue }
+                let rel = u.path.replacingOccurrences(of: base.path + "/", with: "")
+                out.append(rel)
+                if out.count >= 3000 { break }
+            }
+        }
+        fileIndex = out.sorted { $0.count == $1.count ? $0 < $1 : $0.count < $1.count }
+    }
 
     var body: some View {
         ZStack {
@@ -81,6 +117,7 @@ struct ContentView: View {
                 probe.sweep(store.curated, timeout: 90)
             }
             await pricing.refreshOpenRouter()
+            buildFileIndex()
             startStatusLoop()
         }
     }
@@ -176,7 +213,7 @@ struct ContentView: View {
                     .strokeBorder(on ? Theme.green.opacity(0.3) : .clear, lineWidth: 1))
         )
         .contentShape(Rectangle())
-        .onTapGesture { store.currentID = c.id; liveReset() }
+        .onTapGesture { store.currentID = c.id; liveReset(); rebuildIndex() }
     }
 
     // MARK: - Hauptbereich
@@ -313,6 +350,20 @@ struct ContentView: View {
                         .shadow(color: Theme.green, radius: 5)
                 }
             }
+            if !liveThinking.isEmpty {
+                DisclosureGroup(isExpanded: $showThinking) {
+                    Text(liveThinking).font(Theme.f(11))
+                        .foregroundColor(Theme.muted).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 4)
+                } label: {
+                    Text("Denkschritte (\(liveThinking.count / 4) Token)")
+                        .font(Theme.f(10)).foregroundColor(Theme.muted)
+                }
+                .padding(.horizontal, 11).padding(.vertical, 7)
+                .background(RoundedRectangle(cornerRadius: 9).fill(Color.white.opacity(0.02))
+                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.stroke2, lineWidth: 1)))
+            }
             if !liveTools.isEmpty { ToolChips(tools: liveTools) }
             if let e = liveError { ErrorBox(text: e) }
             if let m = liveMeta {
@@ -338,8 +389,41 @@ struct ContentView: View {
 
     // MARK: - Eingabe
 
+    /// Aufgabenliste, die der Agent selbst fuehrt - wie im echten Claude Code.
+    @ViewBuilder private var todoStrip: some View {
+        if !liveTodos.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text("AUFGABEN").font(Theme.f(9)).foregroundColor(Theme.muted).tracking(1.2)
+                    Text("\(liveTodos.filter { $0.status == "completed" }.count)/\(liveTodos.count)")
+                        .font(Theme.f(9)).foregroundColor(Theme.green)
+                    Spacer()
+                }
+                ForEach(liveTodos) { t in
+                    HStack(spacing: 7) {
+                        Image(systemName: t.symbol).font(.system(size: 9))
+                            .foregroundColor(t.status == "completed" ? Theme.green
+                                             : (t.status == "in_progress" ? Theme.warn : Theme.muted))
+                        Text(t.status == "in_progress" && !t.active.isEmpty ? t.active : t.text)
+                            .font(Theme.f(10.5))
+                            .foregroundColor(t.status == "completed" ? Theme.muted : Theme.text)
+                            .strikethrough(t.status == "completed", color: Theme.muted)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            .padding(.horizontal, 11).padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 9).fill(Theme.glass2)
+                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.stroke2, lineWidth: 1)))
+            .padding(.bottom, 6)
+        }
+    }
+
     private var composer: some View {
         VStack(alignment: .leading, spacing: 7) {
+            todoStrip
             if !attachments.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -370,10 +454,15 @@ struct ContentView: View {
                     text: $input, popupOpen: popupOpen,
                     onSubmit: { submit() },
                     onMove: { d in
-                        guard popupOpen else { return }
-                        slashIdx = max(0, min(slashMatches.count - 1, slashIdx + d))
+                        if !mentionMatches.isEmpty {
+                            mentionIdx = max(0, min(mentionMatches.count - 1, mentionIdx + d))
+                        } else if !slashMatches.isEmpty {
+                            slashIdx = max(0, min(slashMatches.count - 1, slashIdx + d))
+                        }
                     },
-                    onComplete: { completeSlash() },
+                    onComplete: {
+                        if !mentionMatches.isEmpty { completeMention() } else { completeSlash() }
+                    },
                     onEscape: { input = "" },
                     onHistory: { _ in
                         if historyIdx > 0 { historyIdx -= 1; input = history[historyIdx] }
@@ -393,7 +482,9 @@ struct ContentView: View {
             .padding(.horizontal, 11).padding(.vertical, 8)
             .glass(12, fill: Theme.glass2)
             .overlay(alignment: .topLeading) {
-                if popupOpen { slashPopup.offset(y: -CGFloat(slashMatches.count) * 30 - 14) }
+                if popupOpen {
+                    slashPopup.offset(y: -CGFloat(max(slashMatches.count, mentionMatches.count)) * 30 - 14)
+                }
             }
 
             statusBar
@@ -474,7 +565,39 @@ struct ContentView: View {
         return CGFloat(lines) * 18 + 12
     }
 
-    private var slashPopup: some View {
+    @ViewBuilder private var slashPopup: some View {
+        if !mentionMatches.isEmpty { mentionPopup } else { commandPopup }
+    }
+
+    private var mentionPopup: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(mentionMatches.enumerated()), id: \.element) { i, f in
+                HStack(spacing: 9) {
+                    Image(systemName: "doc").font(.system(size: 9))
+                        .foregroundColor(i == mentionIdx ? Theme.green : Theme.muted)
+                    Text(f).font(Theme.f(11.5))
+                        .foregroundColor(i == mentionIdx ? Theme.green : Theme.text)
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .padding(.horizontal, 11).padding(.vertical, 6)
+                .background(i == mentionIdx ? Theme.green.opacity(0.12) : .clear)
+                .contentShape(Rectangle())
+                .onTapGesture { mentionIdx = i; completeMention() }
+            }
+        }
+        .frame(width: 520)
+        .glass(11, fill: Theme.panel.opacity(0.98))
+        .shadow(color: .black.opacity(0.6), radius: 18, y: 6)
+    }
+
+    private func completeMention() {
+        guard mentionIdx < mentionMatches.count, let at = input.lastIndex(of: "@") else { return }
+        input = String(input[input.startIndex..<at]) + "@" + mentionMatches[mentionIdx] + " "
+        mentionIdx = 0
+    }
+
+    private var commandPopup: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(slashMatches.enumerated()), id: \.element.id) { i, c in
                 HStack(spacing: 9) {
@@ -510,9 +633,12 @@ struct ContentView: View {
         }
     }
 
+    private func rebuildIndex() { buildFileIndex() }
+
     private func liveReset() {
         liveText = ""; liveTools = []; liveMeta = nil; liveError = nil
         liveIn = 0; liveOut = 0; liveCost = nil; liveStart = nil
+        liveThinking = ""; liveTodos = []
     }
 
     private func shortModel(_ m: String) -> String { Store.shortModel(m) }
@@ -592,7 +718,7 @@ struct ContentView: View {
         guard let dir = chooseFolder(title: "Ordner fuer diesen Chat") else { return }
         if dir == Paths.home.path { store.say("Home-Verzeichnis nicht erlaubt", bad: true); return }
         _ = store.newChat(cwd: dir)
-        liveReset()
+        liveReset(); rebuildIndex()
         store.say("Chat angelegt: " + URL(fileURLWithPath: dir).lastPathComponent)
     }
 
@@ -787,6 +913,8 @@ struct ContentView: View {
                 }
             }
         case .text(let t): liveText += t
+        case .thinking(let t): liveThinking += t
+        case .todos(let items): liveTodos = items
         case .tool(let n, let i): liveTools.append(ToolCall(name: n, input: i))
         case .toolResult(let r):
             if var last = liveTools.popLast() { last.result = r; liveTools.append(last) }
@@ -812,6 +940,7 @@ struct ContentView: View {
         var m = Message(role: "assistant", text: liveText, tools: liveTools)
         m.isError = liveError != nil
         if liveIn > 0 { m.inputTokens = liveIn; m.outputTokens = liveOut }
+        if !liveThinking.isEmpty { m.thinking = liveThinking }
         m.costUSD = liveCost
         if let e = liveError, liveText.isEmpty { m.text = e }
         if liveText.isEmpty && liveTools.isEmpty && liveError == nil {
