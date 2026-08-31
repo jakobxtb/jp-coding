@@ -207,10 +207,49 @@ struct SettingsSheet: View {
             kv("Proxy", Backend.proxyBase)
             kv("Claude Code", setup.claudeVersion.isEmpty ? "nicht gefunden" : setup.claudeVersion)
             kv("Skills aktiv", "\(store.skillCount)")
+            kv("Konnektoren", mcpCount == 0 ? "keine" : "\(mcpCount) konfiguriert")
+            HStack(spacing: 8) {
+                Button("Konnektoren-Datei anlegen") { makeMCP() }.buttonStyle(JPButton())
+                Button("Im Finder zeigen") {
+                    NSWorkspace.shared.activateFileViewerSelecting([Paths.config.appendingPathComponent("mcp.json")])
+                }.buttonStyle(JPButton()).disabled(mcpCount == 0)
+            }
+            .padding(.top, 8)
+            Text("Konnektoren (MCP) traegst du in mcp.json ein - gleiche Form wie in Claude Code: "
+               + "{\"mcpServers\": {\"name\": {\"command\": \"npx\", \"args\": [...]}}}. "
+               + "Die Datei liegt im App-Paket und ist von deiner echten Claude-Konfiguration getrennt.")
+                .font(Theme.f(10.5)).foregroundColor(Theme.muted).lineSpacing(4).padding(.top, 6)
             Text("JP Coding startet Claude Code in einer macOS-Sandbox. Schreibzugriff auf "
                + "~/.claude, Shell-Profile und die Schluesseldatei ist auf Kernel-Ebene gesperrt.")
                 .font(Theme.f(11)).foregroundColor(Theme.muted).lineSpacing(4).padding(.top, 10)
         }
+    }
+
+    private var mcpCount: Int {
+        let u = Paths.config.appendingPathComponent("mcp.json")
+        guard let d = try? Data(contentsOf: u),
+              let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let servers = j["mcpServers"] as? [String: Any] else { return 0 }
+        return servers.count
+    }
+
+    private func makeMCP() {
+        let u = Paths.config.appendingPathComponent("mcp.json")
+        if !FileManager.default.fileExists(atPath: u.path) {
+            let tpl = """
+            {
+              "mcpServers": {
+                "beispiel-filesystem": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-filesystem", "\(Paths.home.path)/Downloads"]
+                }
+              }
+            }
+            """
+            try? tpl.write(to: u, atomically: true, encoding: .utf8)
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([u])
+        store.say("mcp.json angelegt - nach dem Bearbeiten neuen Chat starten")
     }
 
     private func kv(_ l: String, _ r: String) -> some View {

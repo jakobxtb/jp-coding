@@ -6,7 +6,7 @@ enum RunEvent {
     case text(String)
     case tool(name: String, input: String)
     case toolResult(String)
-    case done(ms: Int?, turns: Int?, isError: Bool)
+    case done(ms: Int?, turns: Int?, isError: Bool, input: Int, output: Int)
     case failure(String)
 }
 
@@ -41,6 +41,12 @@ final class Runner: ObservableObject {
         // eines anderen Anbieters laesst sich nicht zuverlaessig weiterfuehren.
         let canResume = (chat.sessionId?.isEmpty == false) && (chat.sessionModel == chat.model)
         if canResume, let sid = chat.sessionId { args += ["--resume", sid] }
+        // Konnektoren: eigene mcp.json im App-Konfigordner, getrennt von der
+        // Konfiguration des echten Claude.
+        let mcp = Paths.config.appendingPathComponent("mcp.json")
+        if FileManager.default.fileExists(atPath: mcp.path) {
+            args += ["--mcp-config", mcp.path, "--strict-mcp-config"]
+        }
         Log.w("runner: resume=\(canResume ? "ja" : "nein") sid=\(chat.sessionId ?? "-") sessionModel=\(chat.sessionModel ?? "-")")
 
         let p = Process()
@@ -153,9 +159,14 @@ final class Runner: ObservableObject {
                 out.append(.toolResult(shorten(b["content"], 400)))
             }
         case "result":
+            let u = e["usage"] as? [String: Any] ?? [:]
+            let cacheRead = (u["cache_read_input_tokens"] as? Int) ?? 0
+            let cacheWrite = (u["cache_creation_input_tokens"] as? Int) ?? 0
             out.append(.done(ms: e["duration_ms"] as? Int,
                              turns: e["num_turns"] as? Int,
-                             isError: (e["is_error"] as? Bool) ?? false))
+                             isError: (e["is_error"] as? Bool) ?? false,
+                             input: ((u["input_tokens"] as? Int) ?? 0) + cacheRead + cacheWrite,
+                             output: (u["output_tokens"] as? Int) ?? 0))
         default: break
         }
         return out

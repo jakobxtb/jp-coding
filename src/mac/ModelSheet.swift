@@ -3,6 +3,7 @@ import SwiftUI
 struct ModelSheet: View {
     @ObservedObject var store: Store
     @ObservedObject var probe: ModelProbe
+    @ObservedObject var pricing: Pricing
     var onPick: (String) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -10,6 +11,7 @@ struct ModelSheet: View {
     @State private var onlyWorking = false
     @State private var reasoning = false
     @State private var provider = ""
+    @State private var sortByScore = true
     @State private var keys: [ProviderKey] = []
 
     private var prefix: String {
@@ -39,6 +41,13 @@ struct ModelSheet: View {
         var list = byProvider[activeProvider] ?? []
         if !query.isEmpty { list = list.filter { $0.localizedCaseInsensitiveContains(query) } }
         if onlyWorking { list = list.filter { probe.result(for: fullID($0))?.ok == true } }
+        if sortByScore {
+            list.sort { a, b in
+                let sa = CodingScore.score(for: a) ?? 0, sb = CodingScore.score(for: b) ?? 0
+                if sa != sb { return sa > sb }
+                return a < b
+            }
+        }
         return list
     }
 
@@ -63,6 +72,7 @@ struct ModelSheet: View {
         }
         .task {
             await store.refreshModels()
+            if pricing.info.isEmpty { await pricing.refreshOpenRouter() }
             keys = Backend.providers.map { p in
                 var q = p; q.isSet = !Backend.envValue(p.key).isEmpty; return q
             }
@@ -102,6 +112,8 @@ struct ModelSheet: View {
                     .background(RoundedRectangle(cornerRadius: 9).fill(Color.black.opacity(0.4))
                         .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.stroke2, lineWidth: 1)))
                 Toggle("nur funktionierende", isOn: $onlyWorking)
+                    .toggleStyle(.checkbox).font(Theme.f(11)).foregroundColor(Theme.muted)
+                Toggle("nach Eignung", isOn: $sortByScore)
                     .toggleStyle(.checkbox).font(Theme.f(11)).foregroundColor(Theme.muted)
                 Toggle("Reasoning", isOn: $reasoning)
                     .toggleStyle(.checkbox).font(Theme.f(11)).foregroundColor(Theme.muted)
@@ -197,9 +209,31 @@ struct ModelSheet: View {
                 .font(.system(size: 11))
                 .foregroundColor(active ? Theme.green : Theme.muted.opacity(0.45))
 
+            if let sc = CodingScore.score(for: base) {
+                Text("\(sc)")
+                    .font(Theme.f(11, .semibold))
+                    .foregroundColor(sc >= 9 ? Theme.green : (sc >= 7 ? Theme.text : Theme.muted))
+                    .frame(width: 20)
+                    .help("Eignung fuers Programmieren: \(sc)/10 (\(CodingScore.label(sc)))")
+            } else {
+                Text("–").font(Theme.f(11)).foregroundColor(Theme.muted.opacity(0.4)).frame(width: 20)
+            }
+
             VStack(alignment: .leading, spacing: 2) {
-                Text(base).font(Theme.f(12))
-                    .foregroundColor(active ? Theme.green : Theme.text).lineLimit(1)
+                HStack(spacing: 7) {
+                    Text(base).font(Theme.f(12))
+                        .foregroundColor(active ? Theme.green : Theme.text).lineLimit(1)
+                    if let inf = pricing.info[base] {
+                        if inf.isFree {
+                            Text("gratis").font(Theme.f(9.5)).foregroundColor(Theme.green.opacity(0.9))
+                        } else {
+                            Text(String(format: "~$%.3f/Nachricht", inf.estimatedMessageCost()))
+                                .font(Theme.f(9.5)).foregroundColor(Theme.warn.opacity(0.85))
+                                .help(String(format: "%.2f $/M ein, %.2f $/M aus, Kontext %d",
+                                             inf.promptPerMillion, inf.completionPerMillion, inf.contextLength))
+                        }
+                    }
+                }
                 if let r {
                     Text(r.ok ? "Werkzeuge OK in \(String(format: "%.1f", Double(r.ms)/1000))s"
                               + (r.ms > 20000 ? "  (langsam)" : "") + "  ·  \(r.age)"

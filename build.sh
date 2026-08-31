@@ -49,8 +49,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleName</key><string>JP Coding</string>
   <key>CFBundleDisplayName</key><string>JP Coding</string>
   <key>CFBundleIdentifier</key><string>com.jakobpapaj.jpcoding</string>
-  <key>CFBundleVersion</key><string>3.0</string>
-  <key>CFBundleShortVersionString</key><string>3.0</string>
+  <key>CFBundleVersion</key><string>4.0</string>
+  <key>CFBundleShortVersionString</key><string>4.0</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>JP Coding</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>

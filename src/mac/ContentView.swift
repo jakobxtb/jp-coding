@@ -6,6 +6,7 @@ struct ContentView: View {
     @StateObject var store = Store()
     @StateObject var runner = Runner()
     @StateObject var probe = ModelProbe()
+    @StateObject var pricing = Pricing()
 
     @State private var input = ""
     @State private var attachments: [String] = []
@@ -13,6 +14,11 @@ struct ContentView: View {
     @State private var liveTools: [ToolCall] = []
     @State private var liveMeta: String? = nil
     @State private var liveError: String? = nil
+    @State private var liveIn = 0
+    @State private var liveOut = 0
+    @State private var liveCost: Double? = nil
+    @State private var liveStart: Date? = nil
+    @State private var liveTick = 0
     @State private var streaming = false
     @State private var history: [String] = []
     @State private var historyIdx = 0
@@ -51,7 +57,7 @@ struct ContentView: View {
         .overlay(alignment: .bottom) { toastView }
         .sheet(isPresented: $showSettings) { SettingsSheet(store: store) }
         .sheet(isPresented: $showSkills)   { SkillsSheet(store: store) }
-        .sheet(isPresented: $showModels)   { ModelSheet(store: store, probe: probe, onPick: applyModel) }
+        .sheet(isPresented: $showModels)   { ModelSheet(store: store, probe: probe, pricing: pricing, onPick: applyModel) }
         .sheet(isPresented: $showSetup)    { SetupSheet(store: store) }
         .sheet(isPresented: $showHelp)     { HelpSheet(commands: Slash.merged(cli: store.slashCommands)) }
         .task {
@@ -65,6 +71,7 @@ struct ContentView: View {
             if probe.workingModels().isEmpty && !probe.sweepRunning {
                 probe.sweep(store.curated, timeout: 90)
             }
+            await pricing.refreshOpenRouter()
             startStatusLoop()
         }
     }
@@ -111,6 +118,15 @@ struct ContentView: View {
                 statRow("Proxy", store.proxyOnline ? "online" : "offline", dot: store.proxyOnline)
                 statRow("Skills aktiv", "\(store.skillCount)", dot: nil)
                 statRow("Speicher", Paths.data.path.contains(".app/") ? "Paket" : "App Support", dot: nil)
+                if let c = pricing.credits {
+                    statRow("OpenRouter", String(format: "$%.4f verbraucht", c.usage), dot: nil)
+                    if let rem = c.remaining {
+                        statRow("Guthaben", String(format: "$%.2f frei", rem), dot: nil)
+                    }
+                }
+                if chatCost > 0 {
+                    statRow("dieser Chat", fmtCost(chatCost), dot: nil)
+                }
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
         }
@@ -263,15 +279,21 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity)
             }
             .onChange(of: liveText) { _, _ in sp.scrollTo("BOTTOM", anchor: .bottom) }
+            .onChange(of: liveTick) { _, _ in }
             .onChange(of: chat?.messages.count ?? 0) { _, _ in sp.scrollTo("BOTTOM", anchor: .bottom) }
         }
     }
 
     private var liveRow: some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 7) {
+            HStack(spacing: 8) {
                 Text("JP").font(Theme.f(10)).foregroundColor(Theme.green).tracking(1.6)
-                Text(streaming ? "laeuft ..." : "").font(Theme.f(10)).foregroundColor(Theme.muted)
+                if streaming {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small).scaleEffect(0.5).frame(width: 14, height: 10)
+                        Text(workingLabel).font(Theme.f(10)).foregroundColor(Theme.muted)
+                    }
+                }
             }
             if !liveText.isEmpty {
                 MDBody(text: liveText)
@@ -407,15 +429,48 @@ struct ContentView: View {
             while true {
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
                 await store.refreshStatus()
+                await pricing.refreshCredits()
             }
         }
     }
 
     private func liveReset() {
         liveText = ""; liveTools = []; liveMeta = nil; liveError = nil
+        liveIn = 0; liveOut = 0; liveCost = nil; liveStart = nil
     }
 
     private func shortModel(_ m: String) -> String { Store.shortModel(m) }
+
+    private func fmtTokens(_ n: Int) -> String {
+        n >= 1000 ? String(format: "%.1fk", Double(n)/1000) : "\(n)"
+    }
+    private func fmtCost(_ c: Double) -> String {
+        c < 0.01 ? String(format: "$%.4f", c) : String(format: "$%.3f", c)
+    }
+    /// Summe der Kosten dieses Chats.
+    /// Was gerade passiert: Zeit, letzter Werkzeugaufruf, empfangene Zeichen.
+    private var workingLabel: String {
+        var bits: [String] = []
+        if let st = liveStart {
+            bits.append(String(format: "%.0fs", Date().timeIntervalSince(st)))
+        }
+        if let last = liveTools.last {
+            bits.append("nutzt " + last.name)
+        } else if liveText.isEmpty {
+            bits.append("denkt nach")
+        } else {
+            bits.append("schreibt")
+        }
+        if !liveText.isEmpty {
+            let approx = max(1, liveText.count / 4)
+            bits.append("~\(approx) Token")
+        }
+        return bits.joined(separator: " · ")
+    }
+
+    private var chatCost: Double {
+        (chat?.messages ?? []).compactMap { $0.costUSD }.reduce(0, +)
+    }
 
     private func completeSlash() {
         guard slashIdx < slashMatches.count else { return }
@@ -613,6 +668,13 @@ struct ContentView: View {
         store.save(c)
         input = ""; attachments = []; liveReset(); streaming = true
 
+        liveStart = Date()
+        Task {
+            while streaming {
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                liveTick &+= 1
+            }
+        }
         Task {
             if !(await Backend.ensureProxy(wait: 20)) {
                 liveError = "Proxy nicht erreichbar. /proxy oder Einstellungen > System."
@@ -650,8 +712,18 @@ struct ContentView: View {
         case .tool(let n, let i): liveTools.append(ToolCall(name: n, input: i))
         case .toolResult(let r):
             if var last = liveTools.popLast() { last.result = r; liveTools.append(last) }
-        case .done(let ms, let turns, _):
-            if let ms { liveMeta = String(format: "%.1fs, %d Schritt(e)", Double(ms)/1000.0, turns ?? 1) }
+        case .done(let ms, let turns, _, let input, let output):
+            liveIn = input; liveOut = output
+            let mdl = chat?.model ?? store.state.model
+            if let inf = pricing.info(for: mdl), !inf.isFree {
+                liveCost = inf.cost(input: input, output: output)
+            }
+            var parts: [String] = []
+            if let ms { parts.append(String(format: "%.1fs", Double(ms)/1000.0)) }
+            parts.append("\(turns ?? 1) Schritt(e)")
+            if input > 0 { parts.append("\(fmtTokens(input)) ein / \(fmtTokens(output)) aus") }
+            if let c = liveCost { parts.append(fmtCost(c)) }
+            liveMeta = parts.joined(separator: " · ")
         case .failure(let m): liveError = m
         }
     }
@@ -661,6 +733,8 @@ struct ContentView: View {
         guard var c = chat else { return }
         var m = Message(role: "assistant", text: liveText, tools: liveTools)
         m.isError = liveError != nil
+        if liveIn > 0 { m.inputTokens = liveIn; m.outputTokens = liveOut }
+        m.costUSD = liveCost
         if let e = liveError, liveText.isEmpty { m.text = e }
         if liveText.isEmpty && liveTools.isEmpty && liveError == nil {
             m.isError = true
@@ -724,6 +798,14 @@ struct MessageRow: View {
                 MDBody(text: message.text)
             }
             if !message.tools.isEmpty { ToolChips(tools: message.tools) }
+            if let inTok = message.inputTokens {
+                let out = message.outputTokens ?? 0
+                let cost = message.costUSD
+                Text("\(inTok >= 1000 ? String(format: "%.1fk", Double(inTok)/1000) : "\(inTok)") ein / "
+                   + "\(out >= 1000 ? String(format: "%.1fk", Double(out)/1000) : "\(out)") aus"
+                   + (cost != nil ? String(format: "  ·  $%.4f", cost!) : ""))
+                    .font(Theme.f(10)).foregroundColor(Theme.muted.opacity(0.8))
+            }
         }
     }
 }

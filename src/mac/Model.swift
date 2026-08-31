@@ -20,6 +20,9 @@ struct Message: Codable, Identifiable, Hashable {
     var durationMs: Int? = nil
     var turns: Int? = nil
     var isError: Bool = false
+    var inputTokens: Int? = nil
+    var outputTokens: Int? = nil
+    var costUSD: Double? = nil
 
     static func now() -> String {
         let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: Date())
